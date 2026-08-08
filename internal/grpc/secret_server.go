@@ -461,17 +461,10 @@ func mapSecretError(err error) error {
 			"invalid secret",
 		)
 
-	// default:
-	// 	return status.Error(
-	// 		codes.Internal,
-	// 		"internal server error",
-	// 	)
 	default:
-
-		return status.Errorf(
+		return status.Error(
 			codes.Internal,
-			"internal server error: %v",
-			err,
+			"internal server error",
 		)
 	}
 }
