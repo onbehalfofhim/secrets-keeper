@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package secretkeeper.v1;
+
+option go_package = "github.com/onbehalfofhim/secrets-keeper/api/proto";
+
+import "google/protobuf/timestamp.proto";
+
+enum SecretType {
+    SECRET_TYPE_UNSPECIFIED = 0;
+    SECRET_TYPE_TEXT = 1;
+    SECRET_TYPE_LOGIN_PASSWORD = 2;
+    SECRET_TYPE_BANK_CARD = 3;
+    SECRET_TYPE_BINARY_FILE = 4;
+}
+
+
+message SecretMetadata {
+    string id = 1;
+    SecretType type = 2;
+
+    string title = 3;
+    string description = 4;
+
+    google.protobuf.Timestamp created_at = 5;
+    google.protobuf.Timestamp updated_at = 6;
+}

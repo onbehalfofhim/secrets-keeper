@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package secretkeeper.v1;
+
+option go_package = "github.com/onbehalfofhim/secrets-keeper/api/proto";
+
+service BinaryService {
+    rpc UploadBinary(stream UploadBinaryChunk) returns (UploadBinaryResponse);
+    rpc DownloadBinary(DownloadBinaryRequest) returns (stream DownloadBinaryChunk);
+}
+
+message UploadBinaryChunk {
+    string secret_id = 1;
+    bytes chunk = 2;
+}
+
+message UploadBinaryResponse {}
+
+message DownloadBinaryRequest {
+    string secret_id = 1;
+}
+
+message DownloadBinaryChunk {
+    bytes chunk = 1;
+}
