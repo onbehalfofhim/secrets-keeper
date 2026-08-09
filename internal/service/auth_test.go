@@ -57,8 +57,8 @@ func TestAuthService_Register(t *testing.T) {
 			ctx context.Context,
 			login, passwordHash string,
 		) (*models.User, error)
-		want       *models.User
-		wantErr    error
+		want    *models.User
+		wantErr error
 	}{
 		{
 			name:     "empty login",

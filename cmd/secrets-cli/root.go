@@ -6,8 +6,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const version = "1.0.0"
-
 // NewRootCommand создаёт root Cobra command.
 func NewRootCommand(app *App) *cobra.Command {
 	rootCmd := &cobra.Command{
@@ -41,7 +39,7 @@ func NewRootCommand(app *App) *cobra.Command {
 	)
 
 	rootCmd.AddCommand(
-		newVersionCommand(),
+		newVersionCommand(app),
 		newRegisterCommand(app),
 		newLoginCommand(app),
 		newLogoutCommand(app),
@@ -52,13 +50,25 @@ func NewRootCommand(app *App) *cobra.Command {
 	return rootCmd
 }
 
-func newVersionCommand() *cobra.Command {
+func newVersionCommand(app *App) *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
-		Short: "Show CLI version",
-
+		Short: "Show CLI version and build date",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("secrets-cli", version)
+			fmt.Fprintf(
+				cmd.OutOrStdout(),
+				"secrets-cli\n",
+			)
+			fmt.Fprintf(
+				cmd.OutOrStdout(),
+				"version: %s\n",
+				app.buildInfo.Version,
+			)
+			fmt.Fprintf(
+				cmd.OutOrStdout(),
+				"build date: %s\n",
+				app.buildInfo.BuildDate,
+			)
 		},
 	}
 }

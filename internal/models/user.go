@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Модель пользователя приложения
+// User содержит данные пользователя.
 type User struct {
 	ID           uuid.UUID
 	Login        string

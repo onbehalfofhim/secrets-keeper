@@ -479,7 +479,7 @@ func main() {
 
 	fmt.Println()
 	fmt.Println("========================================")
-	fmt.Println("ALL SCENARIOS PASSED")
+	fmt.Println("MAIN SCENARIOS PASSED")
 	fmt.Println("========================================")
 
 	runSecurityTests(
@@ -494,6 +494,11 @@ func main() {
 		secretClient,
 		binaryClient,
 	)
+
+	fmt.Println()
+	fmt.Println("========================================")
+	fmt.Println("ALL CLIENT SCENARIOS PASSED")
+	fmt.Println("========================================")
 }
 
 // ============================================================

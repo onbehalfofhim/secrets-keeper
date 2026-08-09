@@ -16,16 +16,23 @@ var (
 	ErrInvalidPassword    = errors.New("invalid password")
 )
 
+// AuthService реализует бизнес-логику регистрации пользователей
+// и аутентификации.
 type AuthService struct {
 	users repository.UserRepo
 	jwt   *auth.JWT
 }
 
+// LoginResult содержит результат успешной аутентификации пользователя.
 type LoginResult struct {
 	AccessToken string
 	ExpiresIn   int64
 }
 
+// NewAuthService создаёт новый сервис аутентификации.
+//
+// users используется для работы с пользователями,
+// jwt — для генерации токенов доступа.
 func NewAuthService(users repository.UserRepo, jwt *auth.JWT) *AuthService {
 	return &AuthService{
 		users: users,
@@ -33,6 +40,10 @@ func NewAuthService(users repository.UserRepo, jwt *auth.JWT) *AuthService {
 	}
 }
 
+// Register регистрирует нового пользователя.
+//
+// Перед сохранением пароль хешируется. Если пользователь с указанным
+// логином уже существует, возвращается repository.ErrUserExists.
 func (s *AuthService) Register(ctx context.Context, login, password string) (*models.User, error) {
 	if login == "" {
 		return nil, ErrInvalidLogin
@@ -63,6 +74,11 @@ func (s *AuthService) Register(ctx context.Context, login, password string) (*mo
 	return user, nil
 }
 
+// Login аутентифицирует пользователя и выдаёт JWT-токен.
+//
+// При неверном логине или пароле возвращается ErrInvalidCredentials.
+// Одинаковая ошибка для обоих случаев предотвращает раскрытие
+// информации о существовании пользователя.
 func (s *AuthService) Login(ctx context.Context, login, password string) (*LoginResult, error) {
 	if login == "" || password == "" {
 		return nil, ErrInvalidCredentials

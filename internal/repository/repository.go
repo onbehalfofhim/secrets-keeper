@@ -8,13 +8,14 @@ import (
 	"github.com/onbehalfofhim/secrets-keeper/internal/models"
 )
 
-// интерфейс хранилища пользователей приложения
+// UserRepo интерфейс хранилища пользователей приложения.
 type UserRepo interface {
 	Create(ctx context.Context, login, passwordHash string) (*models.User, error)
 	GetByLogin(ctx context.Context, login string) (*models.User, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*models.User, error)
 }
 
+// SecretRepo интерфейс хранилища секретов пользователя.
 type SecretRepo interface {
 	Create(ctx context.Context, secret *models.Secret) (*models.Secret, error)
 	GetByID(ctx context.Context, ownerID, secretID uuid.UUID) (*models.Secret, error)

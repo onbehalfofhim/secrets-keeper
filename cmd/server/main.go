@@ -90,6 +90,7 @@ func main() {
 
 	encryptor, err := crypto.NewAESGCM(
 		[]byte(cfg.EncryptionKey),
+		log,
 	)
 	if err != nil {
 		log.Error("failed to initialize encryption", "error", err)

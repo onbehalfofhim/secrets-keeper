@@ -12,6 +12,9 @@ import (
 	"golang.org/x/term"
 )
 
+// newRegisterCommand создаёт команду:
+//
+//	secrets-cli register
 func newRegisterCommand(app *App) *cobra.Command {
 	return &cobra.Command{
 		Use:   "register",
@@ -23,6 +26,9 @@ func newRegisterCommand(app *App) *cobra.Command {
 	}
 }
 
+// newLoginCommand создаёт команду:
+//
+//	secrets-cli login
 func newLoginCommand(app *App) *cobra.Command {
 	return &cobra.Command{
 		Use:   "login",
@@ -34,6 +40,9 @@ func newLoginCommand(app *App) *cobra.Command {
 	}
 }
 
+// newLogoutCommand создаёт команду:
+//
+//	secrets-cli logout
 func newLogoutCommand(app *App) *cobra.Command {
 	return &cobra.Command{
 		Use:   "logout",
@@ -45,6 +54,7 @@ func newLogoutCommand(app *App) *cobra.Command {
 	}
 }
 
+// registerUser ргеистрируется пользователя.
 func registerUser(app *App) error {
 	login, password, err := readCredentials()
 	if err != nil {
@@ -71,6 +81,8 @@ func registerUser(app *App) error {
 	return nil
 }
 
+// loginUser авторизирует пользователя.
+// Сохраняет JWT-токен в файл.
 func loginUser(app *App) error {
 	login, password, err := readCredentials()
 	if err != nil {
@@ -106,6 +118,8 @@ func loginUser(app *App) error {
 	return nil
 }
 
+// logoutUser завершает сессию пользователя.
+// Удаляет сохранённый JWT.
 func logoutUser(app *App) error {
 	if err := app.client.DeleteToken(); err != nil {
 		return err
@@ -116,6 +130,7 @@ func logoutUser(app *App) error {
 	return nil
 }
 
+// readCredentials сбор входных данных пользователя.
 func readCredentials() (string, string, error) {
 	fmt.Print("Login: ")
 

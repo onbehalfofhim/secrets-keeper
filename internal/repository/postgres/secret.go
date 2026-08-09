@@ -10,16 +10,22 @@ import (
 	"github.com/onbehalfofhim/secrets-keeper/internal/repository"
 )
 
-// представляет репозиторий для работы с секретами
+// SecretRepository представляет репозиторий для работы с секретами.
 type SecretRepository struct {
 	db *sql.DB
 }
 
-// создает новый репозиторий секретов
+// NewSecretRepository создаёт новый репозиторий секретов
+// с указанным подключением к PostgreSQL.
 func NewSecretRepository(db *sql.DB) *SecretRepository {
 	return &SecretRepository{db: db}
 }
 
+// Create сохраняет новый секрет в PostgreSQL.
+//
+// Если идентификатор секрета не задан, генерируется новый UUID.
+// Если метаданные не заданы, сохраняется пустой JSON-объект.
+// Метод возвращает сохранённый секрет с заполненными временными метками.
 func (r *SecretRepository) Create(ctx context.Context, secret *models.Secret) (*models.Secret, error) {
 	query := `
 		INSERT INTO secrets (
@@ -76,6 +82,12 @@ func (r *SecretRepository) Create(ctx context.Context, secret *models.Secret) (*
 	return &result, nil
 }
 
+// GetByID возвращает секрет по его идентификатору,
+// принадлежащий указанному пользователю.
+//
+// Проверка ownerID непосредственно в SQL-запросе обеспечивает,
+// что пользователь не может получить секрет другого пользователя.
+// Если секрет не найден, возвращается repository.ErrSecretNotFound.
 func (r *SecretRepository) GetByID(ctx context.Context, ownerID, secretID uuid.UUID) (*models.Secret, error) {
 	query := `
 		SELECT
@@ -120,6 +132,10 @@ func (r *SecretRepository) GetByID(ctx context.Context, ownerID, secretID uuid.U
 	return &secret, nil
 }
 
+// List возвращает список всех секретов указанного пользователя.
+//
+// Секреты сортируются по дате создания в порядке убывания.
+// Секреты других пользователей в результат не попадают.
 func (r *SecretRepository) List(ctx context.Context, ownerID uuid.UUID) ([]*models.Secret, error) {
 	query := `
 		SELECT
@@ -169,6 +185,12 @@ func (r *SecretRepository) List(ctx context.Context, ownerID uuid.UUID) ([]*mode
 	return secrets, nil
 }
 
+// Update обновляет секрет указанного пользователя.
+//
+// Обновляются тип секрета, зашифрованные данные и метаданные.
+// Время изменения updated_at устанавливается на стороне PostgreSQL.
+// Если секрет не найден или не принадлежит пользователю,
+// возвращается repository.ErrSecretNotFound.
 func (r *SecretRepository) Update(ctx context.Context, secret *models.Secret) (*models.Secret, error) {
 	query := `
 		UPDATE secrets
@@ -225,6 +247,11 @@ func (r *SecretRepository) Update(ctx context.Context, secret *models.Secret) (*
 	return &result, nil
 }
 
+// Delete удаляет секрет пользователя.
+//
+// Удаление выполняется только при совпадении secretID и ownerID.
+// Если секрет не найден или не принадлежит пользователю,
+// возвращается repository.ErrSecretNotFound.
 func (r *SecretRepository) Delete(ctx context.Context, ownerID, secretID uuid.UUID) error {
 	const query = `
 		DELETE FROM secrets
@@ -254,6 +281,11 @@ func (r *SecretRepository) Delete(ctx context.Context, ownerID, secretID uuid.UU
 	return nil
 }
 
+// UpdateEncryptedData обновляет только зашифрованные данные секрета.
+//
+// Метод используется для операций с бинарными данными, когда
+// остальные свойства секрета изменять не требуется.
+// Проверка ownerID не позволяет изменить файл другого пользователя.
 func (r *SecretRepository) UpdateEncryptedData(ctx context.Context, ownerID uuid.UUID, secretID uuid.UUID, encryptedData []byte) error {
 	query := `
 		UPDATE secrets

@@ -11,17 +11,17 @@ import (
 	"github.com/onbehalfofhim/secrets-keeper/internal/repository"
 )
 
-// представляет репозиторий для работы с пользователями
+// UserRepository представляет репозиторий для работы с пользователями.
 type UserRepository struct {
 	db *sql.DB
 }
 
-// создает новый репозиторий пользователей
+// NewUsersRepository создает новый репозиторий пользователей.
 func NewUsersRepository(db *sql.DB) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-// создание пользователя в БД
+// Create создание пользователя в БД.
 func (r *UserRepository) Create(ctx context.Context, login, passwordHash string) (*models.User, error) {
 	query := `INSERT INTO users (id, login, password_hash)
 		VALUES ($1, $2, $3)
@@ -54,7 +54,7 @@ func (r *UserRepository) Create(ctx context.Context, login, passwordHash string)
 	return &user, nil
 }
 
-// поиск пользователя по логину
+// GetByLogin поиск пользователя по логину.
 func (r *UserRepository) GetByLogin(ctx context.Context, login string) (*models.User, error) {
 	query := `SELECT 
 			id, 
@@ -85,7 +85,7 @@ func (r *UserRepository) GetByLogin(ctx context.Context, login string) (*models.
 	return &user, nil
 }
 
-// поиск пользователя по логину
+// GetByID поиск пользователя по id.
 func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
 	query := `SELECT 
 			id, 

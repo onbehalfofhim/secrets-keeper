@@ -51,6 +51,7 @@ func newSecretCommand(app *App) *cobra.Command {
 }
 
 // newSecretCreateCommand создаёт команду:
+//
 //	secrets-cli secret create
 func newSecretCreateCommand(app *App, flags *secretFlags) *cobra.Command {
 	cmd := &cobra.Command{
@@ -68,6 +69,7 @@ func newSecretCreateCommand(app *App, flags *secretFlags) *cobra.Command {
 }
 
 // newSecretGetCommand создаёт команду:
+//
 //	secrets-cli secret get <id>
 func newSecretGetCommand(app *App) *cobra.Command {
 	return &cobra.Command{
@@ -83,6 +85,7 @@ func newSecretGetCommand(app *App) *cobra.Command {
 }
 
 // newSecretListCommand создаёт команду:
+//
 //	secrets-cli secret list
 func newSecretListCommand(app *App) *cobra.Command {
 	return &cobra.Command{
@@ -98,6 +101,7 @@ func newSecretListCommand(app *App) *cobra.Command {
 }
 
 // newSecretUpdateCommand создаёт команду:
+//
 //	secrets-cli secret update <id>
 func newSecretUpdateCommand(app *App, flags *secretFlags) *cobra.Command {
 	cmd := &cobra.Command{
@@ -117,6 +121,7 @@ func newSecretUpdateCommand(app *App, flags *secretFlags) *cobra.Command {
 }
 
 // newSecretDeleteCommand создаёт команду:
+//
 //	secrets-cli secret delete <id>
 func newSecretDeleteCommand(app *App) *cobra.Command {
 	return &cobra.Command{

@@ -13,6 +13,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// AuthServer реализует gRPC API для регистрации
+// и авторизации пользователей.
 type AuthServer struct {
 	pb.UnimplementedAuthServiceServer
 
@@ -20,6 +22,7 @@ type AuthServer struct {
 	logger  *logger.Logger
 }
 
+// NewAuthServer создаёт gRPC-сервер для работы с пользователями.
 func NewAuthServer(service *service.AuthService, logger *logger.Logger) *AuthServer {
 	return &AuthServer{
 		service: service,
@@ -27,6 +30,10 @@ func NewAuthServer(service *service.AuthService, logger *logger.Logger) *AuthSer
 	}
 }
 
+// Register регистрирует нового пользователя.
+//
+// В случае успешной регистрации возвращает идентификатор пользователя.
+// Ошибки сервиса преобразуются в соответствующие gRPC status codes.
 func (s *AuthServer) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
 	login := req.GetLogin()
 
@@ -45,6 +52,10 @@ func (s *AuthServer) Register(ctx context.Context, req *pb.RegisterRequest) (*pb
 	}, nil
 }
 
+// Login выполняет аутентификацию пользователя.
+//
+// В случае успешной аутентификации возвращает JWT access token
+// и время его действия в секундах.
 func (s *AuthServer) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginResponse, error) {
 	login := req.GetLogin()
 
@@ -64,6 +75,15 @@ func (s *AuthServer) Login(ctx context.Context, req *pb.LoginRequest) (*pb.Login
 	}, nil
 }
 
+// mapAuthError преобразует внутренние ошибки auth/service
+// в соответствующие gRPC-коды.
+//
+// Ошибки валидации преобразуются в InvalidArgument,
+// неверные credentials — в Unauthenticated,
+// попытка регистрации существующего пользователя —
+// в AlreadyExists.
+//
+// Неизвестные ошибки преобразуются в Internal.
 func mapAuthError(err error) error {
 	switch {
 	case errors.Is(err, service.ErrInvalidCredentials):

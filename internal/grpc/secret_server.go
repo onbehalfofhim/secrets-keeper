@@ -18,14 +18,16 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// SecretServer реализует gRPC API для создания,
+// получения, изменения, просмотра и удаления секретов.
 type SecretServer struct {
 	pb.UnimplementedSecretServiceServer
 
 	service *service.SecretService
-
-	logger *logger.Logger
+	logger  *logger.Logger
 }
 
+// NewSecretServer создаёт gRPC-сервер для работы с секретами.
 func NewSecretServer(service *service.SecretService, logger *logger.Logger) *SecretServer {
 	return &SecretServer{
 		service: service,
@@ -33,6 +35,8 @@ func NewSecretServer(service *service.SecretService, logger *logger.Logger) *Sec
 	}
 }
 
+// getUserID извлекает ID аутентифицированного пользователя
+// из context текущего gRPC-запроса.
 func getUserID(ctx context.Context) (uuid.UUID, error) {
 	userID, ok := UserIDFromContext(ctx)
 	if !ok {
@@ -53,6 +57,12 @@ func getUserID(ctx context.Context) (uuid.UUID, error) {
 	return id, nil
 }
 
+// CreateSecret создаёт новый секрет для текущего пользователя.
+//
+// Тип и данные секрета преобразуются из protobuf-модели
+// во внутреннюю модель сервиса.
+// Для бинарного секрета на этом этапе сохраняются только metadata;
+// содержимое файла загружается через BinaryService.
 func (s *SecretServer) CreateSecret(ctx context.Context, req *pb.CreateSecretRequest) (*pb.CreateSecretResponse, error) {
 	ownerID, err := getUserID(ctx)
 	if err != nil {
@@ -92,6 +102,12 @@ func (s *SecretServer) CreateSecret(ctx context.Context, req *pb.CreateSecretReq
 	}, nil
 }
 
+// protoToCreateSecretInput преобразует protobuf-секрет
+// во внутреннюю модель, используемую SecretService.
+//
+// Для бинарного секрета формируются metadata с именем файла
+// и MIME-типом. Содержимое бинарного файла передаётся
+// отдельным UploadBinary RPC.
 func protoToCreateSecretInput(secret *pb.Secret) (service.CreateSecretInput, error) {
 	var (
 		secretType models.SecretType
@@ -169,11 +185,17 @@ func protoToCreateSecretInput(secret *pb.Secret) (service.CreateSecretInput, err
 	}, nil
 }
 
+// secretMetadata представляет metadata секрета
+// во внутреннем JSON-формате.
 type secretMetadata struct {
 	Title       string `json:"title,omitempty"`
 	Description string `json:"description,omitempty"`
 }
 
+// protoMetadataToJSON преобразует protobuf metadata
+// во внутреннее JSON-представление.
+//
+// Если metadata отсутствует, возвращается пустой JSON-объект.
 func protoMetadataToJSON(metadata *pb.SecretMetadata) (json.RawMessage, error) {
 	if metadata == nil {
 		return json.RawMessage(`{}`), nil
@@ -192,6 +214,11 @@ func protoMetadataToJSON(metadata *pb.SecretMetadata) (json.RawMessage, error) {
 	return data, nil
 }
 
+// UpdateSecret обновляет существующий секрет.
+//
+// ID секрета берётся из metadata запроса.
+// Доступ к секрету дополнительно проверяется на уровне сервиса
+// с использованием ID текущего пользователя.
 func (s *SecretServer) UpdateSecret(ctx context.Context, req *pb.UpdateSecretRequest) (*pb.UpdateSecretResponse, error) {
 	ownerID, err := getUserID(ctx)
 	if err != nil {
@@ -249,6 +276,8 @@ func (s *SecretServer) UpdateSecret(ctx context.Context, req *pb.UpdateSecretReq
 	return &pb.UpdateSecretResponse{}, nil
 }
 
+// protoToUpdateSecretInput преобразует protobuf-секрет
+// во внутреннюю модель для обновления секрета.
 func protoToUpdateSecretInput(secretID uuid.UUID, secret *pb.Secret) (service.UpdateSecretInput, error) {
 	var (
 		secretType models.SecretType
@@ -313,6 +342,11 @@ func protoToUpdateSecretInput(secretID uuid.UUID, secret *pb.Secret) (service.Up
 	}, nil
 }
 
+// GetSecret возвращает секрет текущего пользователя.
+//
+// Для обычных секретов возвращаются расшифрованные данные.
+// Для бинарных секретов возвращаются только metadata;
+// содержимое файла получается через BinaryService.
 func (s *SecretServer) GetSecret(ctx context.Context, req *pb.GetSecretRequest) (*pb.GetSecretResponse, error) {
 	ownerID, err := getUserID(ctx)
 	if err != nil {
@@ -323,7 +357,7 @@ func (s *SecretServer) GetSecret(ctx context.Context, req *pb.GetSecretRequest) 
 
 	secretID, err := uuid.Parse(req.GetId())
 	if err != nil {
-		s.logger.Info("get secret: invalid secret id", "ownerId", ownerID, "secretId", secretID, "error", err)
+		s.logger.Info("get secret: invalid secret id", "ownerId", ownerID, "secretId", req.GetId(), "error", err)
 
 		return nil, status.Error(
 			codes.InvalidArgument,
@@ -352,6 +386,11 @@ func (s *SecretServer) GetSecret(ctx context.Context, req *pb.GetSecretRequest) 
 	}, nil
 }
 
+// domainToProtoSecret преобразует внутреннюю модель секрета
+// в protobuf-представление.
+//
+// Бинарные данные не передаются через SecretService.
+// Для их получения используется BinaryService.DownloadBinary.
 func domainToProtoSecret(secret *models.Secret, data any) (*pb.Secret, error) {
 	result := &pb.Secret{
 		Metadata: domainMetadataToProto(secret),
@@ -409,6 +448,10 @@ func domainToProtoSecret(secret *models.Secret, data any) (*pb.Secret, error) {
 	return result, nil
 }
 
+// ListSecrets возвращает список секретов текущего пользователя.
+//
+// В ответе передаются только metadata секретов,
+// без расшифрованных данных.
 func (s *SecretServer) ListSecrets(ctx context.Context, req *pb.ListSecretsRequest) (*pb.ListSecretsResponse, error) {
 	ownerID, err := getUserID(ctx)
 	if err != nil {
@@ -440,6 +483,7 @@ func (s *SecretServer) ListSecrets(ctx context.Context, req *pb.ListSecretsReque
 	return response, nil
 }
 
+// DeleteSecret удаляет секрет текущего пользователя.
 func (s *SecretServer) DeleteSecret(ctx context.Context, req *pb.DeleteSecretRequest) (*pb.DeleteSecretResponse, error) {
 	ownerID, err := getUserID(ctx)
 	if err != nil {
@@ -469,6 +513,8 @@ func (s *SecretServer) DeleteSecret(ctx context.Context, req *pb.DeleteSecretReq
 	return &pb.DeleteSecretResponse{}, nil
 }
 
+// domainMetadataToProto преобразует metadata секрета
+// из внутренней модели в protobuf.
 func domainMetadataToProto(secret *models.Secret) *pb.SecretMetadata {
 	return &pb.SecretMetadata{
 		Id:        secret.ID.String(),
@@ -478,6 +524,8 @@ func domainMetadataToProto(secret *models.Secret) *pb.SecretMetadata {
 	}
 }
 
+// secretTypeToProto преобразует внутренний тип секрета
+// в соответствующий protobuf enum.
 func secretTypeToProto(secretType models.SecretType) pb.SecretType {
 	switch secretType {
 	case models.SecretText:
@@ -497,6 +545,12 @@ func secretTypeToProto(secretType models.SecretType) pb.SecretType {
 	}
 }
 
+// mapSecretError преобразует внутренние ошибки работы с секретами
+// в соответствующие gRPC-коды.
+//
+// Ошибка отсутствующего секрета преобразуется в NotFound.
+// Ошибки валидации преобразуются в InvalidArgument.
+// Остальные ошибки скрываются от клиента и возвращаются как Internal.
 func mapSecretError(err error) error {
 	switch {
 	case errors.Is(err, repository.ErrSecretNotFound):

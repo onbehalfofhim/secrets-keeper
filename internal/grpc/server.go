@@ -12,12 +12,21 @@ import (
 	"google.golang.org/grpc"
 )
 
+// Server представляет gRPC-сервер приложения.
+//
+// Server отвечает за создание gRPC-сервера, регистрацию RPC-сервисов,
+// запуск сервера и его корректное завершение.
 type Server struct {
 	grpcServer *grpc.Server
 	port       string
 	logger     *logger.Logger
 }
 
+// NewServer создаёт и настраивает gRPC-сервер.
+//
+// Регистрирует сервисы аутентификации, работы с секретами и
+// бинарными файлами, а также подключает JWT-interceptor'ы
+// для unary и streaming RPC.
 func NewServer(port string, authServer *AuthServer, secretServer *SecretServer, binaryServer *BinaryServer, jwtManager *auth.JWT, logger *logger.Logger) *Server {
 	grpcServer := grpc.NewServer(
 		grpc.UnaryInterceptor(
@@ -50,6 +59,11 @@ func NewServer(port string, authServer *AuthServer, secretServer *SecretServer, 
 	}
 }
 
+// Start запускает gRPC-сервер.
+//
+// Метод блокируется до остановки сервера или возникновения ошибки.
+// Ошибка grpc.ErrServerStopped считается штатным завершением сервера
+// и не возвращается вызывающему коду.
 func (s *Server) Start() error {
 	listener, err := net.Listen("tcp", s.port)
 	if err != nil {
@@ -77,6 +91,12 @@ func (s *Server) Start() error {
 	return nil
 }
 
+// Stop корректно останавливает gRPC-сервер.
+//
+// Сначала вызывается GracefulStop, который прекращает принимать
+// новые RPC и ожидает завершения уже выполняющихся запросов.
+// Если сервер не успевает завершить работу до истечения ctx,
+// выполняется принудительная остановка через Stop.
 func (s *Server) Stop(ctx context.Context) {
 	s.logger.Info("stopping gRPC server", "address", s.port)
 

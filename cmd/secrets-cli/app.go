@@ -3,19 +3,22 @@ package main
 import (
 	"fmt"
 
+	"github.com/onbehalfofhim/secrets-keeper/internal/buildinfo"
 	clitool "github.com/onbehalfofhim/secrets-keeper/internal/cli"
 )
 
 // App содержит состояние CLI-приложения.
 type App struct {
-	config clitool.Config
-	client *clitool.Client
+	config    clitool.Config
+	client    *clitool.Client
+	buildInfo buildinfo.Info
 }
 
 // NewApp создаёт CLI-приложение.
-func NewApp(config clitool.Config) *App {
+func NewApp(config clitool.Config, buildInfo buildinfo.Info) *App {
 	return &App{
-		config: config,
+		config:    config,
+		buildInfo: buildInfo,
 	}
 }
 

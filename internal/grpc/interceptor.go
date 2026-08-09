@@ -13,15 +13,28 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// contextKey используется для хранения идентификаторов
+// аутентифицированного пользователя в context.Context.
 type contextKey string
 
 const userIDKey contextKey = "userID"
 
+// UserIDFromContext возвращает идентификатор пользователя
+// из контекста текущего gRPC-запроса.
+//
+// Второе возвращаемое значение показывает, был ли найден
+// идентификатор пользователя в контексте.
 func UserIDFromContext(ctx context.Context) (string, bool) {
 	userID, ok := ctx.Value(userIDKey).(string)
 	return userID, ok
 }
 
+// JWTUnaryInterceptor проверяет JWT для unary gRPC-запросов.
+//
+// Публичные методы регистрации и авторизации доступны без JWT.
+// Для остальных методов interceptor извлекает Bearer token
+// из metadata, проверяет его и добавляет ID пользователя
+// в context запроса.
 func JWTUnaryInterceptor(jwtManager *auth.JWT) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
@@ -59,6 +72,11 @@ func JWTUnaryInterceptor(jwtManager *auth.JWT) grpc.UnaryServerInterceptor {
 	}
 }
 
+// extractToken извлекает JWT из authorization metadata.
+//
+// Ожидаемый формат значения:
+//
+//	Bearer <token>
 func extractToken(ctx context.Context) (string, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
@@ -81,6 +99,8 @@ func extractToken(ctx context.Context) (string, error) {
 	return parts[1], nil
 }
 
+// isPublicMethod определяет, может ли gRPC-метод
+// выполняться без JWT-аутентификации.
 func isPublicMethod(method string) bool {
 	switch method {
 	case "/secretkeeper.v1.AuthService/Register",
@@ -91,6 +111,11 @@ func isPublicMethod(method string) bool {
 	}
 }
 
+// JWTStreamInterceptor проверяет JWT для server-streaming
+// и client-streaming gRPC-запросов.
+//
+// После успешной проверки токена ID пользователя добавляется
+// в context stream, доступный обработчику RPC.
 func JWTStreamInterceptor(jwtManager *auth.JWT) grpc.StreamServerInterceptor {
 	return func(
 		srv any,
@@ -134,11 +159,15 @@ func JWTStreamInterceptor(jwtManager *auth.JWT) grpc.StreamServerInterceptor {
 	}
 }
 
+// authenticatedServerStream оборачивает grpc.ServerStream,
+// заменяя его context на context с идентификатором пользователя.
 type authenticatedServerStream struct {
 	grpc.ServerStream
 	ctx context.Context
 }
 
+// Context возвращает context текущего stream с информацией
+// об аутентифицированном пользователе.
 func (s *authenticatedServerStream) Context() context.Context {
 	return s.ctx
 }

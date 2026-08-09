@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/onbehalfofhim/secrets-keeper/internal/buildinfo"
 	clitool "github.com/onbehalfofhim/secrets-keeper/internal/cli"
 )
 
@@ -14,7 +15,7 @@ func main() {
 		// "failed to set environment variables"
 	}
 
-	app := NewApp(cfg)
+	app := NewApp(cfg, buildinfo.Get())
 
 	if err := app.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, clitool.FormatGRPCError(err))

@@ -19,12 +19,18 @@ var (
 	ErrInvalidSecretType = errors.New("invalid secret type")
 )
 
+// SecretService реализует бизнес-логику работы с секретами.
+//
+// Сервис отвечает за валидацию данных, сериализацию и шифрование
+// секретов перед сохранением, а также расшифровку и десериализацию
+// данных при получении.
 type SecretService struct {
 	repository repository.SecretRepo
 	encryptor  crypto.Encryptor
 	serializer serializer.Serializer
 }
 
+// NewSecretService создаёт новый сервис для работы с секретами.
 func NewSecretService(repository repository.SecretRepo, encryptor crypto.Encryptor, serializer serializer.Serializer) *SecretService {
 	return &SecretService{
 		repository: repository,
@@ -33,12 +39,20 @@ func NewSecretService(repository repository.SecretRepo, encryptor crypto.Encrypt
 	}
 }
 
+// CreateSecretInput содержит данные для создания секрета.
 type CreateSecretInput struct {
 	Type     models.SecretType
 	Data     any
 	Metadata json.RawMessage
 }
 
+// Create создаёт новый секрет.
+//
+// Для текстовых, login/password и банковских секретов данные
+// сериализуются в JSON и шифруются перед сохранением.
+//
+// Для бинарного секрета на этом этапе сохраняется только метаинформация.
+// Сам файл загружается отдельным потоковым RPC.
 func (s *SecretService) Create(ctx context.Context, ownerID uuid.UUID, input CreateSecretInput) (*models.Secret, error) {
 	if ownerID == uuid.Nil {
 		return nil, fmt.Errorf(
@@ -106,21 +120,23 @@ func (s *SecretService) Create(ctx context.Context, ownerID uuid.UUID, input Cre
 	return s.repository.Create(ctx, secret)
 }
 
+// Get получает секрет пользователя.
+//
+// Для бинарного секрета возвращается только метаинформация о файле.
+// Содержимое файла не расшифровывается и получается через
+// BinaryService.Download.
+//
+// Для остальных типов секретов зашифрованные данные расшифровываются
+// и десериализуются в соответствующую структуру.
 func (s *SecretService) Get(ctx context.Context, ownerID uuid.UUID, secretID uuid.UUID) (*models.Secret, any, error) {
 	secret, err := s.repository.GetByID(ctx, ownerID, secretID)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// Для бинарного секрета содержимое файла не расшифровываем
-	// и не возвращаем через SecretService.Get.
-	//
-	// В metadata хранятся только:
-	// - filename
-	// - mime_type
-	//
-	// Сам файл хранится в encrypted_data и получается
-	// через BinaryService.Download.
+	// Бинарный секрет содержит в metadata только информацию
+	// о файле: имя и MIME-тип. Само содержимое хранится
+	// в encrypted_data.
 	if secret.Type == models.SecretBinary {
 		var binarySecret models.BinarySecret
 
@@ -163,10 +179,15 @@ func (s *SecretService) Get(ctx context.Context, ownerID uuid.UUID, secretID uui
 	return secret, data, nil
 }
 
+// List возвращает список секретов указанного пользователя.
+//
+// Данные секретов не расшифровываются — возвращается только
+// информация, необходимая для формирования списка.
 func (s *SecretService) List(ctx context.Context, ownerID uuid.UUID) ([]*models.Secret, error) {
 	return s.repository.List(ctx, ownerID)
 }
 
+// UpdateSecretInput содержит данные для обновления секрета.
 type UpdateSecretInput struct {
 	ID       uuid.UUID
 	Type     models.SecretType
@@ -174,6 +195,11 @@ type UpdateSecretInput struct {
 	Metadata json.RawMessage
 }
 
+// Update обновляет существующий секрет.
+//
+// Данные сериализуются при необходимости, затем шифруются
+// и сохраняются в репозитории. Операция выполняется только
+// для указанного владельца секрета.
 func (s *SecretService) Update(ctx context.Context, ownerID uuid.UUID, input UpdateSecretInput) (*models.Secret, error) {
 	if ownerID == uuid.Nil {
 		return nil, fmt.Errorf("%w: owner id is empty", ErrInvalidSecret)
@@ -220,6 +246,7 @@ func (s *SecretService) Update(ctx context.Context, ownerID uuid.UUID, input Upd
 	return s.repository.Update(ctx, secret)
 }
 
+// Delete удаляет секрет указанного пользователя.
 func (s *SecretService) Delete(ctx context.Context, ownerID uuid.UUID, secretID uuid.UUID) error {
 	return s.repository.Delete(
 		ctx,

@@ -12,15 +12,19 @@ import (
 	"github.com/onbehalfofhim/secrets-keeper/internal/repository"
 )
 
+var (
+	ErrBinaryNotUploaded = errors.New("binary file not uploaded")
+)
+
+// BinaryService реализует бизнес-логику загрузки и скачивания
+// бинарных данных секретов.
 type BinaryService struct {
 	repository repository.SecretRepo
 	encryptor  crypto.Encryptor
 }
 
-var (
-	ErrBinaryNotUploaded = errors.New("binary file not uploaded")
-)
-
+// NewBinaryService создаёт новый сервис для работы
+// с бинарными секретами.
 func NewBinaryService(repository repository.SecretRepo, encryptor crypto.Encryptor) *BinaryService {
 	return &BinaryService{
 		repository: repository,
@@ -28,6 +32,11 @@ func NewBinaryService(repository repository.SecretRepo, encryptor crypto.Encrypt
 	}
 }
 
+// Upload загружает бинарные данные в указанный секрет.
+//
+// Перед сохранением данные шифруются с помощью encryptor.
+// Загрузка разрешена только владельцу секрета и только для
+// секретов типа SecretBinary.
 func (s *BinaryService) Upload(ctx context.Context, ownerID uuid.UUID, secretID uuid.UUID, data []byte) error {
 	if ownerID == uuid.Nil {
 		return fmt.Errorf(
@@ -75,6 +84,11 @@ func (s *BinaryService) Upload(ctx context.Context, ownerID uuid.UUID, secretID 
 	)
 }
 
+// Download получает бинарные данные указанного секрета.
+//
+// Данные извлекаются из хранилища в зашифрованном виде,
+// после чего расшифровываются с помощью encryptor.
+// Скачать данные может только владелец бинарного секрета.
 func (s *BinaryService) Download(ctx context.Context, ownerID uuid.UUID, secretID uuid.UUID) ([]byte, error) {
 	if ownerID == uuid.Nil {
 		return nil, fmt.Errorf(

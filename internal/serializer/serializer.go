@@ -13,28 +13,31 @@ var (
 	ErrInvalidSecretData     = errors.New("invalid secret data")
 )
 
-// Serializer is responsible for serialization and deserialization
-// of structured secret data.
+// Serializer определяет операции сериализации и десериализации
+// структурированных данных секрета.
 //
-// Binary secrets are intentionally not handled by Serializer.
-// Their data is kept as raw bytes and encrypted directly.
+// Бинарные секреты не обрабатываются Serializer.
+// Их содержимое хранится в виде []byte и шифруется напрямую.
 type Serializer interface {
 	Serialize(data any) ([]byte, error)
 	Deserialize(secretType models.SecretType, data []byte) (any, error)
 }
 
-// JSONSerializer implements Serializer using encoding/json.
+// JSONSerializer реализует Serializer с использованием encoding/json.
 type JSONSerializer struct{}
 
-// NewJSONSerializer creates a new JSONSerializer.
+// NewJSONSerializer создаёт новый JSON-сериализатор.
 func NewJSONSerializer() *JSONSerializer {
 	return &JSONSerializer{}
 }
 
-// Serialize serializes a structured secret into JSON.
+// Serialize сериализует структурированные данные секрета
+// в формат JSON.
 //
-// BinarySecret is not supported here. Binary data should be encrypted
-// directly without JSON/Base64 encoding.
+// Поддерживаются текстовые секреты, пары логин/пароль
+// и данные банковской карты.
+// BinarySecret не поддерживается: бинарные данные шифруются
+// напрямую без преобразования в JSON или Base64.
 func (s *JSONSerializer) Serialize(data any) ([]byte, error) {
 	if !isSupportedData(data) {
 		return nil, fmt.Errorf(
@@ -52,10 +55,13 @@ func (s *JSONSerializer) Serialize(data any) ([]byte, error) {
 	return result, nil
 }
 
-// Deserialize deserializes JSON into a concrete secret type.
+// Deserialize десериализует JSON и преобразует его
+// в структуру соответствующего типа секрета.
 //
-// BinarySecret is not supported here. Binary data should be decrypted
-// directly into []byte and handled separately.
+// Поддерживаются текстовые секреты, пары логин/пароль
+// и данные банковской карты.
+// BinarySecret не поддерживается, поскольку бинарные данные
+// хранятся и обрабатываются отдельно как []byte.
 func (s *JSONSerializer) Deserialize(secretType models.SecretType, data []byte) (any, error) {
 	var result any
 
@@ -90,8 +96,8 @@ func (s *JSONSerializer) Deserialize(secretType models.SecretType, data []byte) 
 	return result, nil
 }
 
-// isSupportedData checks whether the provided value is a supported
-// structured secret type.
+// isSupportedData проверяет, относится ли переданное значение
+// к одному из поддерживаемых структурированных типов секрета.
 func isSupportedData(data any) bool {
 	switch data.(type) {
 	case *models.TextSecret,

@@ -10,15 +10,19 @@ import (
 
 var ErrInvalidToken = errors.New("invalid token")
 
+// JWT отвечает за создание и проверку JSON Web Token.
 type JWT struct {
 	secret []byte
 	ttl    time.Duration
 }
 
+// Claims содержит claims JWT, используемые приложением.
 type Claims struct {
 	jwt.RegisteredClaims
 }
 
+// NewJWT создаёт менеджер JWT с указанным секретом
+// и временем жизни токена.
 func NewJWT(secret string, ttl time.Duration) *JWT {
 	return &JWT{
 		secret: []byte(secret),
@@ -26,6 +30,16 @@ func NewJWT(secret string, ttl time.Duration) *JWT {
 	}
 }
 
+// GenerateToken создаёт и подписывает JWT для указанного пользователя.
+//
+// ID пользователя сохраняется в claim Subject.
+// В токен также добавляются время выпуска IssuedAt
+// и время окончания действия ExpiresAt.
+//
+// Для подписи используется алгоритм HMAC SHA-256.
+//
+// В качестве второго значения возвращается время жизни токена
+// в секундах.
 func (j *JWT) GenerateToken(userID string) (string, int64, error) {
 	now := time.Now()
 	expiresAt := now.Add(j.ttl)
@@ -51,6 +65,15 @@ func (j *JWT) GenerateToken(userID string) (string, int64, error) {
 	return signedToken, int64(j.ttl.Seconds()), nil
 }
 
+// ValidateToken проверяет JWT и возвращает ID пользователя.
+//
+// При проверке контролируются:
+//   - корректность подписи;
+//   - используемый алгоритм подписи;
+//   - срок действия токена;
+//   - наличие ID пользователя в claim Subject.
+//
+// Если токен недействителен, возвращается ErrInvalidToken.
 func (j *JWT) ValidateToken(tokenString string) (string, error) {
 	token, err := jwt.ParseWithClaims(
 		tokenString,

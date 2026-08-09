@@ -20,3 +20,6 @@ vendor/
 
 #secrets
 .env
+
+#Binary
+bin/

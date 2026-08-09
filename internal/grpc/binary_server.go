@@ -14,6 +14,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// BinaryServer реализует gRPC API для загрузки
+// и скачивания бинарных данных секретов.
 type BinaryServer struct {
 	pb.UnimplementedBinaryServiceServer
 
@@ -21,6 +23,8 @@ type BinaryServer struct {
 	logger  *logger.Logger
 }
 
+// NewBinaryServer создаёт gRPC-сервер для работы
+// с бинарными данными секретов.
 func NewBinaryServer(service *service.BinaryService, logger *logger.Logger) *BinaryServer {
 	return &BinaryServer{
 		service: service,
@@ -28,6 +32,13 @@ func NewBinaryServer(service *service.BinaryService, logger *logger.Logger) *Bin
 	}
 }
 
+// UploadBinary принимает бинарный файл через client-streaming RPC.
+//
+// Клиент передаёт файл несколькими chunks. Все chunks должны
+// содержать один и тот же идентификатор секрета.
+//
+// После получения всех chunks данные передаются в BinaryService
+// для сохранения.
 func (s *BinaryServer) UploadBinary(stream pb.BinaryService_UploadBinaryServer) error {
 	ctx := stream.Context()
 
@@ -134,6 +145,11 @@ func (s *BinaryServer) UploadBinary(stream pb.BinaryService_UploadBinaryServer) 
 	)
 }
 
+// DownloadBinary получает бинарный файл и передаёт его клиенту
+// через server-streaming RPC.
+//
+// Файл отправляется клиенту последовательностью chunks фиксированного
+// размера. Доступ к файлу проверяется с учётом владельца секрета.
 func (s *BinaryServer) DownloadBinary(req *pb.DownloadBinaryRequest, stream pb.BinaryService_DownloadBinaryServer) error {
 	ctx := stream.Context()
 
@@ -148,7 +164,7 @@ func (s *BinaryServer) DownloadBinary(req *pb.DownloadBinaryRequest, stream pb.B
 		req.GetSecretId(),
 	)
 	if err != nil {
-		s.logger.Info("binary upload: invalid secret id", "ownerId", ownerID, "secretId", req.GetSecretId(), "error", err)
+		s.logger.Info("binary download: invalid secret id", "ownerId", ownerID, "secretId", req.GetSecretId(), "error", err)
 
 		return status.Error(
 			codes.InvalidArgument,
@@ -196,6 +212,12 @@ func (s *BinaryServer) DownloadBinary(req *pb.DownloadBinaryRequest, stream pb.B
 	return nil
 }
 
+// mapBinaryError преобразует внутренние ошибки бинарного сервиса
+// в соответствующие gRPC-коды.
+//
+// Ошибки отсутствующего секрета или файла преобразуются в NotFound,
+// ошибки некорректного типа секрета — в InvalidArgument.
+// Неизвестные ошибки преобразуются в Internal.
 func mapBinaryError(err error) error {
 	switch {
 	case errors.Is(err, repository.ErrSecretNotFound):

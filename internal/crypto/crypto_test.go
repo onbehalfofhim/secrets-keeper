@@ -4,9 +4,13 @@ import (
 	"bytes"
 	"errors"
 	"testing"
+
+	"github.com/onbehalfofhim/secrets-keeper/internal/logger"
 )
 
 func TestNewAESGCM(t *testing.T) {
+	logger := logger.NewLogger()
+
 	tests := []struct {
 		name    string
 		key     []byte
@@ -52,7 +56,7 @@ func TestNewAESGCM(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewAESGCM(tt.key)
+			got, err := NewAESGCM(tt.key, logger)
 
 			if tt.wantErr {
 				if err == nil {
@@ -87,8 +91,9 @@ func TestNewAESGCM(t *testing.T) {
 
 func TestAESGCM_EncryptDecrypt(t *testing.T) {
 	key := []byte("01234567890123456789012345678901")
+	logger := logger.NewLogger()
 
-	encryptor, err := NewAESGCM(key)
+	encryptor, err := NewAESGCM(key, logger)
 	if err != nil {
 		t.Fatalf("failed to create encryptor: %v", err)
 	}
@@ -147,8 +152,9 @@ func TestAESGCM_EncryptDecrypt(t *testing.T) {
 
 func TestAESGCM_Decrypt_InvalidCiphertext(t *testing.T) {
 	key := []byte("01234567890123456789012345678901")
+	logger := logger.NewLogger()
 
-	encryptor, err := NewAESGCM(key)
+	encryptor, err := NewAESGCM(key, logger)
 	if err != nil {
 		t.Fatalf("failed to create encryptor: %v", err)
 	}
@@ -190,8 +196,9 @@ func TestAESGCM_Decrypt_InvalidCiphertext(t *testing.T) {
 
 func TestAESGCM_Decrypt_CorruptedCiphertext(t *testing.T) {
 	key := []byte("01234567890123456789012345678901")
+	logger := logger.NewLogger()
 
-	encryptor, err := NewAESGCM(key)
+	encryptor, err := NewAESGCM(key, logger)
 	if err != nil {
 		t.Fatalf("failed to create encryptor: %v", err)
 	}
@@ -225,7 +232,9 @@ func TestAESGCM_Decrypt_CorruptedCiphertext(t *testing.T) {
 func TestAESGCM_Decrypt_ModifiedNonce(t *testing.T) {
 	key := []byte("01234567890123456789012345678901")
 
-	encryptor, err := NewAESGCM(key)
+	logger := logger.NewLogger()
+
+	encryptor, err := NewAESGCM(key, logger)
 	if err != nil {
 		t.Fatalf("failed to create encryptor: %v", err)
 	}
@@ -254,7 +263,9 @@ func TestAESGCM_Decrypt_ModifiedNonce(t *testing.T) {
 func TestAESGCM_Encrypt_RandomNonce(t *testing.T) {
 	key := []byte("01234567890123456789012345678901")
 
-	encryptor, err := NewAESGCM(key)
+	logger := logger.NewLogger()
+
+	encryptor, err := NewAESGCM(key, logger)
 	if err != nil {
 		t.Fatalf("failed to create encryptor: %v", err)
 	}
@@ -279,7 +290,9 @@ func TestAESGCM_Encrypt_RandomNonce(t *testing.T) {
 func TestAESGCM_Encrypt_DoesNotContainPlaintext(t *testing.T) {
 	key := []byte("01234567890123456789012345678901")
 
-	encryptor, err := NewAESGCM(key)
+	logger := logger.NewLogger()
+
+	encryptor, err := NewAESGCM(key, logger)
 	if err != nil {
 		t.Fatalf("failed to create encryptor: %v", err)
 	}
@@ -300,12 +313,14 @@ func TestAESGCM_Decrypt_WrongKey(t *testing.T) {
 	key1 := []byte("01234567890123456789012345678901")
 	key2 := []byte("12345678901234567890123456789012")
 
-	encryptor1, err := NewAESGCM(key1)
+	logger := logger.NewLogger()
+
+	encryptor1, err := NewAESGCM(key1, logger)
 	if err != nil {
 		t.Fatalf("failed to create first encryptor: %v", err)
 	}
 
-	encryptor2, err := NewAESGCM(key2)
+	encryptor2, err := NewAESGCM(key2, logger)
 	if err != nil {
 		t.Fatalf("failed to create second encryptor: %v", err)
 	}
