@@ -5,6 +5,7 @@ import (
 	"io"
 
 	pb "github.com/onbehalfofhim/secrets-keeper/api/proto"
+	"github.com/onbehalfofhim/secrets-keeper/internal/logger"
 	"github.com/onbehalfofhim/secrets-keeper/internal/repository"
 	"github.com/onbehalfofhim/secrets-keeper/internal/service"
 
@@ -17,11 +18,13 @@ type BinaryServer struct {
 	pb.UnimplementedBinaryServiceServer
 
 	service *service.BinaryService
+	logger  *logger.Logger
 }
 
-func NewBinaryServer(service *service.BinaryService) *BinaryServer {
+func NewBinaryServer(service *service.BinaryService, logger *logger.Logger) *BinaryServer {
 	return &BinaryServer{
 		service: service,
+		logger:  logger,
 	}
 }
 
@@ -30,6 +33,8 @@ func (s *BinaryServer) UploadBinary(stream pb.BinaryService_UploadBinaryServer) 
 
 	ownerID, err := getUserID(ctx)
 	if err != nil {
+		s.logger.Info("upload binary: authentication failed", "error", err)
+
 		return err
 	}
 
@@ -55,6 +60,8 @@ func (s *BinaryServer) UploadBinary(stream pb.BinaryService_UploadBinaryServer) 
 
 		// Получаем secret ID
 		if req.GetSecretId() == "" {
+			s.logger.Info("binary upload: secret id is empty", "ownerId", ownerID)
+
 			return status.Error(
 				codes.InvalidArgument,
 				"secret id is required",
@@ -65,6 +72,8 @@ func (s *BinaryServer) UploadBinary(stream pb.BinaryService_UploadBinaryServer) 
 			req.GetSecretId(),
 		)
 		if err != nil {
+			s.logger.Info("binary upload: invalid secret id", "ownerId", ownerID, "secretId", req.GetSecretId(), "error", err)
+
 			return status.Error(
 				codes.InvalidArgument,
 				"invalid secret id",
@@ -75,6 +84,13 @@ func (s *BinaryServer) UploadBinary(stream pb.BinaryService_UploadBinaryServer) 
 		if secretID == uuid.Nil {
 			secretID = currentSecretID
 		} else if secretID != currentSecretID {
+			s.logger.Info(
+				"binary upload: secret id changed between chunks",
+				"ownerId", ownerID,
+				"secretId", secretID,
+				"receivedSecretId", currentSecretID,
+			)
+
 			return status.Error(
 				codes.InvalidArgument,
 				"secret id must be the same for all chunks",
@@ -100,14 +116,18 @@ func (s *BinaryServer) UploadBinary(stream pb.BinaryService_UploadBinaryServer) 
 	}
 
 	// Передаем файл в service
-	if err := s.service.Upload(
-		ctx,
-		ownerID,
-		secretID,
-		data,
-	); err != nil {
+	if err := s.service.Upload(ctx, ownerID, secretID, data); err != nil {
+		s.logger.Error(
+			"binary upload failed",
+			"ownerId", ownerID,
+			"secretId", secretID,
+			"error", err,
+		)
+
 		return mapBinaryError(err)
 	}
+
+	s.logger.Info("binary uploaded", "ownerId", ownerID, "secretId", secretID)
 
 	return stream.SendAndClose(
 		&pb.UploadBinaryResponse{},
@@ -119,6 +139,8 @@ func (s *BinaryServer) DownloadBinary(req *pb.DownloadBinaryRequest, stream pb.B
 
 	ownerID, err := getUserID(ctx)
 	if err != nil {
+		s.logger.Info("download binary: authentication failed", "error", err)
+
 		return err
 	}
 
@@ -126,18 +148,23 @@ func (s *BinaryServer) DownloadBinary(req *pb.DownloadBinaryRequest, stream pb.B
 		req.GetSecretId(),
 	)
 	if err != nil {
+		s.logger.Info("binary upload: invalid secret id", "ownerId", ownerID, "secretId", req.GetSecretId(), "error", err)
+
 		return status.Error(
 			codes.InvalidArgument,
 			"invalid secret id",
 		)
 	}
 
-	data, err := s.service.Download(
-		ctx,
-		ownerID,
-		secretID,
-	)
+	data, err := s.service.Download(ctx, ownerID, secretID)
 	if err != nil {
+		s.logger.Error(
+			"binary download failed",
+			"ownerId", ownerID,
+			"secretId", secretID,
+			"error", err,
+		)
+
 		return mapBinaryError(err)
 	}
 
@@ -163,6 +190,8 @@ func (s *BinaryServer) DownloadBinary(req *pb.DownloadBinaryRequest, stream pb.B
 			)
 		}
 	}
+
+	s.logger.Info("binary downloaded", "ownerId", ownerID, "secretId", secretID)
 
 	return nil
 }

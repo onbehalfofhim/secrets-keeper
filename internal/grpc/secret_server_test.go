@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	pb "github.com/onbehalfofhim/secrets-keeper/api/proto"
+	"github.com/onbehalfofhim/secrets-keeper/internal/logger"
 	"github.com/onbehalfofhim/secrets-keeper/internal/models"
 	"github.com/onbehalfofhim/secrets-keeper/internal/repository"
 	"github.com/onbehalfofhim/secrets-keeper/internal/serializer"
@@ -151,8 +152,9 @@ func newTestSecretServer(repo repository.SecretRepo) *SecretServer {
 		&mockEncryptor{},
 		serializer.NewJSONSerializer(),
 	)
+	logger := logger.NewLogger()
 
-	return NewSecretServer(secretService)
+	return NewSecretServer(secretService, logger)
 }
 
 func contextWithUserID(userID uuid.UUID) context.Context {

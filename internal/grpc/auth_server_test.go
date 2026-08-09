@@ -10,6 +10,7 @@ import (
 
 	pb "github.com/onbehalfofhim/secrets-keeper/api/proto"
 	"github.com/onbehalfofhim/secrets-keeper/internal/auth"
+	"github.com/onbehalfofhim/secrets-keeper/internal/logger"
 	"github.com/onbehalfofhim/secrets-keeper/internal/models"
 	"github.com/onbehalfofhim/secrets-keeper/internal/repository"
 	"github.com/onbehalfofhim/secrets-keeper/internal/service"
@@ -63,7 +64,9 @@ func newTestAuthServer(repo repository.UserRepo) *AuthServer {
 		repo,
 		auth.NewJWT("test-secret", time.Hour),
 	)
-	return NewAuthServer(authService)
+
+	logger := logger.NewLogger()
+	return NewAuthServer(authService, logger)
 }
 
 func TestNewAuthServer(t *testing.T) {
@@ -72,7 +75,9 @@ func TestNewAuthServer(t *testing.T) {
 		auth.NewJWT("test-secret", time.Hour),
 	)
 
-	server := NewAuthServer(authService)
+	logger := logger.NewLogger()
+
+	server := NewAuthServer(authService, logger)
 
 	if server == nil {
 		t.Fatal("expected server, got nil")

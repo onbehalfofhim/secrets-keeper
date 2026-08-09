@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	pb "github.com/onbehalfofhim/secrets-keeper/api/proto"
+	"github.com/onbehalfofhim/secrets-keeper/internal/logger"
 	"github.com/onbehalfofhim/secrets-keeper/internal/repository"
 	"github.com/onbehalfofhim/secrets-keeper/internal/service"
 
@@ -16,23 +17,28 @@ type AuthServer struct {
 	pb.UnimplementedAuthServiceServer
 
 	service *service.AuthService
+	logger  *logger.Logger
 }
 
-func NewAuthServer(service *service.AuthService) *AuthServer {
+func NewAuthServer(service *service.AuthService, logger *logger.Logger) *AuthServer {
 	return &AuthServer{
 		service: service,
+		logger:  logger,
 	}
 }
 
 func (s *AuthServer) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
-	user, err := s.service.Register(
-		ctx,
-		req.GetLogin(),
-		req.GetPassword(),
-	)
+	login := req.GetLogin()
+
+	user, err := s.service.Register(ctx, login, req.GetPassword())
+
 	if err != nil {
+		s.logger.Error("user registration failed", "login", login, "error", err)
+
 		return nil, mapAuthError(err)
 	}
+
+	s.logger.Info("user registered", "userId", user.ID, "login", user.Login)
 
 	return &pb.RegisterResponse{
 		UserId: user.ID.String(),
@@ -40,15 +46,17 @@ func (s *AuthServer) Register(ctx context.Context, req *pb.RegisterRequest) (*pb
 }
 
 func (s *AuthServer) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginResponse, error) {
-	result, err := s.service.Login(
-		ctx,
-		req.GetLogin(),
-		req.GetPassword(),
-	)
+	login := req.GetLogin()
+
+	result, err := s.service.Login(ctx, login, req.GetPassword())
 
 	if err != nil {
+		s.logger.Error("user login failed", "login", login, "error", err)
+
 		return nil, mapAuthError(err)
 	}
+
+	s.logger.Info("user logged in", "login", login, "expiresIn", result.ExpiresIn)
 
 	return &pb.LoginResponse{
 		AccessToken: result.AccessToken,

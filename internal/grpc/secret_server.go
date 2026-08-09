@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	pb "github.com/onbehalfofhim/secrets-keeper/api/proto"
+	"github.com/onbehalfofhim/secrets-keeper/internal/logger"
 	"github.com/onbehalfofhim/secrets-keeper/internal/models"
 	"github.com/onbehalfofhim/secrets-keeper/internal/repository"
 	"github.com/onbehalfofhim/secrets-keeper/internal/service"
@@ -21,11 +22,14 @@ type SecretServer struct {
 	pb.UnimplementedSecretServiceServer
 
 	service *service.SecretService
+
+	logger *logger.Logger
 }
 
-func NewSecretServer(service *service.SecretService) *SecretServer {
+func NewSecretServer(service *service.SecretService, logger *logger.Logger) *SecretServer {
 	return &SecretServer{
 		service: service,
+		logger:  logger,
 	}
 }
 
@@ -52,11 +56,15 @@ func getUserID(ctx context.Context) (uuid.UUID, error) {
 func (s *SecretServer) CreateSecret(ctx context.Context, req *pb.CreateSecretRequest) (*pb.CreateSecretResponse, error) {
 	ownerID, err := getUserID(ctx)
 	if err != nil {
+		s.logger.Info("create secret: authentication failed", "error", err)
+
 		return nil, err
 	}
 
 	secret := req.GetSecret()
 	if secret == nil {
+		s.logger.Info("create secret: request is empty", "ownerId", ownerID)
+
 		return nil, status.Error(
 			codes.InvalidArgument,
 			"secret is required",
@@ -65,13 +73,19 @@ func (s *SecretServer) CreateSecret(ctx context.Context, req *pb.CreateSecretReq
 
 	input, err := protoToCreateSecretInput(secret)
 	if err != nil {
+		s.logger.Info("create secret: invalid request", "ownerId", ownerID, "error", err)
+
 		return nil, err
 	}
 
 	result, err := s.service.Create(ctx, ownerID, input)
 	if err != nil {
+		s.logger.Error("create secret failed", "ownerId", ownerID, "type", input.Type, "error", err)
+
 		return nil, mapSecretError(err)
 	}
+
+	s.logger.Info("secret created", "ownerId", ownerID, "secretId", result.ID, "type", result.Type)
 
 	return &pb.CreateSecretResponse{
 		Id: result.ID.String(),
@@ -181,11 +195,15 @@ func protoMetadataToJSON(metadata *pb.SecretMetadata) (json.RawMessage, error) {
 func (s *SecretServer) UpdateSecret(ctx context.Context, req *pb.UpdateSecretRequest) (*pb.UpdateSecretResponse, error) {
 	ownerID, err := getUserID(ctx)
 	if err != nil {
+		s.logger.Info("update secret: authentication failed", "error", err)
+
 		return nil, err
 	}
 
 	secret := req.GetSecret()
 	if secret == nil {
+		s.logger.Info("update secret: request is empty", "ownerId", ownerID)
+
 		return nil, status.Error(
 			codes.InvalidArgument,
 			"secret is required",
@@ -194,6 +212,8 @@ func (s *SecretServer) UpdateSecret(ctx context.Context, req *pb.UpdateSecretReq
 
 	metadata := secret.GetMetadata()
 	if metadata == nil {
+		s.logger.Info("update secret: metadata is empty", "ownerId", ownerID)
+
 		return nil, status.Error(
 			codes.InvalidArgument,
 			"secret metadata is required",
@@ -202,6 +222,8 @@ func (s *SecretServer) UpdateSecret(ctx context.Context, req *pb.UpdateSecretReq
 
 	secretID, err := uuid.Parse(metadata.GetId())
 	if err != nil {
+		s.logger.Info("update secret: invalid secret id", "ownerId", ownerID, "secretId", metadata.GetId(), "error", err)
+
 		return nil, status.Error(
 			codes.InvalidArgument,
 			"invalid secret id",
@@ -210,13 +232,19 @@ func (s *SecretServer) UpdateSecret(ctx context.Context, req *pb.UpdateSecretReq
 
 	input, err := protoToUpdateSecretInput(secretID, secret)
 	if err != nil {
+		s.logger.Info("update secret: invalid request", "ownerId", ownerID, "secretId", secretID, "error", err)
+
 		return nil, err
 	}
 
 	_, err = s.service.Update(ctx, ownerID, input)
 	if err != nil {
+		s.logger.Error("update secret failed", "ownerId", ownerID, "secretId", secretID, "type", input.Type, "error", err)
+
 		return nil, mapSecretError(err)
 	}
+
+	s.logger.Info("secret updated", "ownerId", ownerID, "secretId", secretID, "type", input.Type)
 
 	return &pb.UpdateSecretResponse{}, nil
 }
@@ -288,11 +316,15 @@ func protoToUpdateSecretInput(secretID uuid.UUID, secret *pb.Secret) (service.Up
 func (s *SecretServer) GetSecret(ctx context.Context, req *pb.GetSecretRequest) (*pb.GetSecretResponse, error) {
 	ownerID, err := getUserID(ctx)
 	if err != nil {
+		s.logger.Info("get secret: authentication failed", "error", err)
+
 		return nil, err
 	}
 
 	secretID, err := uuid.Parse(req.GetId())
 	if err != nil {
+		s.logger.Info("get secret: invalid secret id", "ownerId", ownerID, "secretId", secretID, "error", err)
+
 		return nil, status.Error(
 			codes.InvalidArgument,
 			"invalid secret id",
@@ -301,13 +333,19 @@ func (s *SecretServer) GetSecret(ctx context.Context, req *pb.GetSecretRequest) 
 
 	secret, data, err := s.service.Get(ctx, ownerID, secretID)
 	if err != nil {
+		s.logger.Error("get secret failed", "ownerId", ownerID, "secretId", secretID, "error", err)
+
 		return nil, mapSecretError(err)
 	}
 
 	result, err := domainToProtoSecret(secret, data)
 	if err != nil {
+		s.logger.Error("convert secret to proto failed", "ownerId", ownerID, "secretId", secretID, "error", err)
+
 		return nil, err
 	}
+
+	s.logger.Info("secret retrieved", "ownerId", ownerID, "secretId", secretID, "type", secret.Type)
 
 	return &pb.GetSecretResponse{
 		Secret: result,
@@ -374,11 +412,15 @@ func domainToProtoSecret(secret *models.Secret, data any) (*pb.Secret, error) {
 func (s *SecretServer) ListSecrets(ctx context.Context, req *pb.ListSecretsRequest) (*pb.ListSecretsResponse, error) {
 	ownerID, err := getUserID(ctx)
 	if err != nil {
+		s.logger.Info("list secrets: authentication failed", "error", err)
+
 		return nil, err
 	}
 
 	secrets, err := s.service.List(ctx, ownerID)
 	if err != nil {
+		s.logger.Error("list secrets failed", "ownerId", ownerID, "error", err)
+
 		return nil, mapSecretError(err)
 	}
 
@@ -393,17 +435,22 @@ func (s *SecretServer) ListSecrets(ctx context.Context, req *pb.ListSecretsReque
 		)
 	}
 
+	s.logger.Info("secrets listed", "ownerId", ownerID, "count", len(secrets))
+
 	return response, nil
 }
 
 func (s *SecretServer) DeleteSecret(ctx context.Context, req *pb.DeleteSecretRequest) (*pb.DeleteSecretResponse, error) {
 	ownerID, err := getUserID(ctx)
 	if err != nil {
+		s.logger.Info("delete secret: authentication failed", "error", err)
 		return nil, err
 	}
 
 	secretID, err := uuid.Parse(req.GetId())
 	if err != nil {
+		s.logger.Info("delete secret: invalid secret id", "ownerId", ownerID, "secretId", req.GetId(), "error", err)
+
 		return nil, status.Error(
 			codes.InvalidArgument,
 			"invalid secret id",
@@ -412,8 +459,12 @@ func (s *SecretServer) DeleteSecret(ctx context.Context, req *pb.DeleteSecretReq
 
 	err = s.service.Delete(ctx, ownerID, secretID)
 	if err != nil {
+		s.logger.Error("delete secret failed", "ownerId", ownerID, "secretId", secretID, "error", err)
+
 		return nil, mapSecretError(err)
 	}
+
+	s.logger.Info("secret deleted", "ownerId", ownerID, "secretId", secretID)
 
 	return &pb.DeleteSecretResponse{}, nil
 }
