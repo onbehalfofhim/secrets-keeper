@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/onbehalfofhim/secrets-keeper/internal/auth"
+	"github.com/onbehalfofhim/secrets-keeper/internal/config"
 	"github.com/onbehalfofhim/secrets-keeper/internal/crypto"
 	grpcserver "github.com/onbehalfofhim/secrets-keeper/internal/grpc"
 	"github.com/onbehalfofhim/secrets-keeper/internal/logger"
@@ -19,46 +20,48 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-const defaultGRPCAddr = ":50051"
+const (
+	databasePingTimeout = 5 * time.Second
+	jwtExpiration       = 24 * time.Hour
+)
 
 func main() {
-	logger := logger.NewLogger()
+	log := logger.NewLogger()
 
-	// Получаем конфигурацию.
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		logger.Error("DATABASE_URL is not set")
-		os.Exit(1)
-	}
+	// ============================================================
+	// Configuration
+	// ============================================================
 
-	jwtSecret := os.Getenv("JWT_SECRET")
-	if jwtSecret == "" {
-		logger.Error("JWT_SECRET is not set")
-		os.Exit(1)
-	}
-
-	encryptionKey := []byte(os.Getenv("ENCRYPTION_KEY"))
-
-	// Подключаемся к PostgreSQL.
-	db, err := sql.Open("pgx", dsn)
+	cfg, err := config.ParseFlags()
 	if err != nil {
-		logger.Error("failed to open database", "error", err)
+		log.Error("failed to load configuration", "error", err)
+
 		os.Exit(1)
 	}
-	defer db.Close()
 
-	ctx, cancel := context.WithTimeout(
-		context.Background(),
-		5*time.Second,
-	)
+	// ============================================================
+	// PostgreSQL
+	// ============================================================
+
+	db, err := sql.Open("pgx", cfg.DatabaseURI)
+	if err != nil {
+		log.Error("failed to open database", "error", err)
+
+		os.Exit(1)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), databasePingTimeout)
 	defer cancel()
 
 	if err := db.PingContext(ctx); err != nil {
-		logger.Error("failed to connect to database", "error", err)
+		log.Error("failed to connect to database", "error", err)
+
+		db.Close()
+
 		os.Exit(1)
 	}
 
-	logger.Info("connected to PostgreSQL")
+	log.Info("connected to PostgreSQL")
 
 	// ============================================================
 	// Auth
@@ -67,8 +70,8 @@ func main() {
 	userRepository := postgres.NewUsersRepository(db)
 
 	jwtManager := auth.NewJWT(
-		jwtSecret,
-		24*time.Hour,
+		cfg.JWTSecret,
+		jwtExpiration,
 	)
 
 	authService := service.NewAuthService(
@@ -78,20 +81,25 @@ func main() {
 
 	authServer := grpcserver.NewAuthServer(
 		authService,
-		logger,
+		log,
 	)
 
 	// ============================================================
 	// Encryption
 	// ============================================================
 
-	encryptor, err := crypto.NewAESGCM(encryptionKey)
+	encryptor, err := crypto.NewAESGCM(
+		[]byte(cfg.EncryptionKey),
+	)
 	if err != nil {
-		logger.Error("failed to initialize encryption", "error", err)
+		log.Error("failed to initialize encryption", "error", err)
+
+		db.Close()
+
 		os.Exit(1)
 	}
 
-	serializer := serializer.NewJSONSerializer()
+	jsonSerializer := serializer.NewJSONSerializer()
 
 	// ============================================================
 	// Secret
@@ -102,12 +110,12 @@ func main() {
 	secretService := service.NewSecretService(
 		secretRepository,
 		encryptor,
-		serializer,
+		jsonSerializer,
 	)
 
 	secretServer := grpcserver.NewSecretServer(
 		secretService,
-		logger,
+		log,
 	)
 
 	// ============================================================
@@ -121,7 +129,7 @@ func main() {
 
 	binaryServer := grpcserver.NewBinaryServer(
 		binaryService,
-		logger,
+		log,
 	)
 
 	// ============================================================
@@ -129,25 +137,27 @@ func main() {
 	// ============================================================
 
 	server := grpcserver.NewServer(
-		defaultGRPCAddr,
+		cfg.RunAddr,
 		authServer,
 		secretServer,
 		binaryServer,
 		jwtManager,
-		logger,
+		log,
 	)
 
 	// ============================================================
-	// Graceful shutdown
+	// Signals
 	// ============================================================
 
 	stop := make(chan os.Signal, 1)
 
-	signal.Notify(
-		stop,
-		os.Interrupt,
-		syscall.SIGTERM,
-	)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	defer signal.Stop(stop)
+
+	// ============================================================
+	// Start gRPC server
+	// ============================================================
 
 	serverErr := make(chan error, 1)
 
@@ -155,16 +165,45 @@ func main() {
 		serverErr <- server.Start()
 	}()
 
+	// ============================================================
+	// Wait
+	// ============================================================
+
 	select {
 	case err := <-serverErr:
 		if err != nil {
-			logger.Error("gRPC server stopped with error", "error", err)
+			log.Error("gRPC server stopped with error", "error", err)
+
+			db.Close()
+
 			os.Exit(1)
 		}
 
-	case <-stop:
-		logger.Info("shutdown signal received")
-
-		server.Stop()
+	case signal := <-stop:
+		log.Info("shutdown signal received", "signal", signal.String())
 	}
+
+	// ============================================================
+	// Graceful shutdown
+	// ============================================================
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+	defer shutdownCancel()
+
+	server.Stop(shutdownCtx)
+
+	// ============================================================
+	// PostgreSQL shutdown
+	// ============================================================
+
+	log.Info("closing PostgreSQL connection")
+
+	if err := db.Close(); err != nil {
+		log.Error("failed to close PostgreSQL connection", "error", err)
+
+		os.Exit(1)
+	}
+
+	log.Info("PostgreSQL connection closed")
+	log.Info("application stopped")
 }

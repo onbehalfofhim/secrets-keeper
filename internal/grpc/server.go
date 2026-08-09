@@ -1,6 +1,7 @@
 package grpc
 
 import (
+	"context"
 	"fmt"
 	"net"
 
@@ -60,6 +61,10 @@ func (s *Server) Start() error {
 	s.logger.Info("gRPC server started", "address", listener.Addr().String())
 
 	if err := s.grpcServer.Serve(listener); err != nil {
+		if err == grpc.ErrServerStopped {
+			return nil
+		}
+
 		s.logger.Error(
 			"gRPC server stopped with error",
 			"address", listener.Addr().String(),
@@ -72,10 +77,23 @@ func (s *Server) Start() error {
 	return nil
 }
 
-func (s *Server) Stop() {
+func (s *Server) Stop(ctx context.Context) {
 	s.logger.Info("stopping gRPC server", "address", s.port)
 
-	s.grpcServer.GracefulStop()
+	stopped := make(chan struct{})
 
-	s.logger.Info("gRPC server stopped", "address", s.port)
+	go func() {
+		s.grpcServer.GracefulStop()
+		close(stopped)
+	}()
+	select {
+	case <-stopped:
+		s.logger.Info("gRPC server stopped gracefully", "address", s.port)
+	case <-ctx.Done():
+		s.logger.Error("gRPC graceful shutdown timeout", "address", s.port, "error", ctx.Err())
+
+		s.grpcServer.Stop()
+
+		s.logger.Info("gRPC server forcefully stopped", "address", s.port)
+	}
 }
