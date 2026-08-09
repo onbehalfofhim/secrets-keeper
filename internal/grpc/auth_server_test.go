@@ -19,15 +19,9 @@ import (
 )
 
 type mockUserRepo struct {
-	createFunc func(
-		ctx context.Context,
-		login, passwordHash string,
-	) (*models.User, error)
+	createFunc func(ctx context.Context, login, passwordHash string) (*models.User, error)
 
-	getByLoginFunc func(
-		ctx context.Context,
-		login string,
-	) (*models.User, error)
+	getByLoginFunc func(ctx context.Context, login string) (*models.User, error)
 
 	createCalled     bool
 	getByLoginCalled bool
@@ -37,10 +31,7 @@ type mockUserRepo struct {
 	getByLogin         string
 }
 
-func (m *mockUserRepo) Create(
-	ctx context.Context,
-	login, passwordHash string,
-) (*models.User, error) {
+func (m *mockUserRepo) Create(ctx context.Context, login, passwordHash string) (*models.User, error) {
 	m.createCalled = true
 	m.createLogin = login
 	m.createPasswordHash = passwordHash
@@ -52,10 +43,7 @@ func (m *mockUserRepo) Create(
 	return nil, nil
 }
 
-func (m *mockUserRepo) GetByLogin(
-	ctx context.Context,
-	login string,
-) (*models.User, error) {
+func (m *mockUserRepo) GetByLogin(ctx context.Context, login string) (*models.User, error) {
 	m.getByLoginCalled = true
 	m.getByLogin = login
 
@@ -66,10 +54,7 @@ func (m *mockUserRepo) GetByLogin(
 	return nil, nil
 }
 
-func (m *mockUserRepo) GetByID(
-	ctx context.Context,
-	id uuid.UUID,
-) (*models.User, error) {
+func (m *mockUserRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
 	return nil, nil
 }
 

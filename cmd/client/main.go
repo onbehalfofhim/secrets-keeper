@@ -481,6 +481,19 @@ func main() {
 	fmt.Println("========================================")
 	fmt.Println("ALL SCENARIOS PASSED")
 	fmt.Println("========================================")
+
+	runSecurityTests(
+		ctx,
+		authClient,
+		secretClient,
+		binaryClient,
+	)
+
+	runNegativeGRPCTests(
+		authClient,
+		secretClient,
+		binaryClient,
+	)
 }
 
 // ============================================================

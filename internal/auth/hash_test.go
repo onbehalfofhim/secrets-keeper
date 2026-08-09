@@ -27,7 +27,6 @@ func TestHashPassword(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			hash, err := HashPassword(tt.password)
 
 			assert.NoError(t, err)
@@ -81,7 +80,6 @@ func TestCheckPassword(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			err := CheckPassword(
 				tt.hash,
 				tt.password,

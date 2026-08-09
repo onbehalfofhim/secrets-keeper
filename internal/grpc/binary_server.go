@@ -182,6 +182,12 @@ func mapBinaryError(err error) error {
 			"invalid binary secret",
 		)
 
+	case errors.Is(err, service.ErrBinaryNotUploaded):
+		return status.Error(
+			codes.NotFound,
+			"binary file not found",
+		)
+
 	default:
 		return status.Error(
 			codes.Internal,

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -16,6 +17,10 @@ type BinaryService struct {
 	encryptor  crypto.Encryptor
 }
 
+var (
+	ErrBinaryNotUploaded = errors.New("binary file not uploaded")
+)
+
 func NewBinaryService(repository repository.SecretRepo, encryptor crypto.Encryptor) *BinaryService {
 	return &BinaryService{
 		repository: repository,
@@ -23,12 +28,7 @@ func NewBinaryService(repository repository.SecretRepo, encryptor crypto.Encrypt
 	}
 }
 
-func (s *BinaryService) Upload(
-	ctx context.Context,
-	ownerID uuid.UUID,
-	secretID uuid.UUID,
-	data []byte,
-) error {
+func (s *BinaryService) Upload(ctx context.Context, ownerID uuid.UUID, secretID uuid.UUID, data []byte) error {
 	if ownerID == uuid.Nil {
 		return fmt.Errorf(
 			"%w: owner id is empty",
@@ -75,11 +75,7 @@ func (s *BinaryService) Upload(
 	)
 }
 
-func (s *BinaryService) Download(
-	ctx context.Context,
-	ownerID uuid.UUID,
-	secretID uuid.UUID,
-) ([]byte, error) {
+func (s *BinaryService) Download(ctx context.Context, ownerID uuid.UUID, secretID uuid.UUID) ([]byte, error) {
 	if ownerID == uuid.Nil {
 		return nil, fmt.Errorf(
 			"%w: owner id is empty",
@@ -108,6 +104,10 @@ func (s *BinaryService) Download(
 			"%w: secret is not binary",
 			ErrInvalidSecretType,
 		)
+	}
+
+	if len(secret.EncryptedData) == 0 {
+		return nil, ErrBinaryNotUploaded
 	}
 
 	data, err := s.encryptor.Decrypt(
