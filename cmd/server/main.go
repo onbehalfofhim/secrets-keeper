@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"database/sql"
+
 	"os"
 	"os/signal"
 	"syscall"
@@ -17,7 +17,7 @@ import (
 	"github.com/onbehalfofhim/secrets-keeper/internal/serializer"
 	"github.com/onbehalfofhim/secrets-keeper/internal/service"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const (
@@ -43,17 +43,17 @@ func main() {
 	// PostgreSQL
 	// ============================================================
 
-	db, err := sql.Open("pgx", cfg.DatabaseURI)
+	ctx, cancel := context.WithTimeout(context.Background(), databasePingTimeout)
+	defer cancel()
+
+	db, err := pgxpool.New(ctx, cfg.DatabaseURI)
 	if err != nil {
-		log.Error("failed to open database", "error", err)
+		log.Error("failed to create database pool", "error", err)
 
 		os.Exit(1)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), databasePingTimeout)
-	defer cancel()
-
-	if err := db.PingContext(ctx); err != nil {
+	if err := db.Ping(ctx); err != nil {
 		log.Error("failed to connect to database", "error", err)
 
 		db.Close()
@@ -199,11 +199,7 @@ func main() {
 
 	log.Info("closing PostgreSQL connection")
 
-	if err := db.Close(); err != nil {
-		log.Error("failed to close PostgreSQL connection", "error", err)
-
-		os.Exit(1)
-	}
+	db.Close()
 
 	log.Info("PostgreSQL connection closed")
 	log.Info("application stopped")

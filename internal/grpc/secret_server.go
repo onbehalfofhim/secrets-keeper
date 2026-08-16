@@ -97,9 +97,9 @@ func (s *SecretServer) CreateSecret(ctx context.Context, req *pb.CreateSecretReq
 
 	s.logger.Info("secret created", "ownerId", ownerID, "secretId", result.ID, "type", result.Type)
 
-	return &pb.CreateSecretResponse{
+	return pb.CreateSecretResponse_builder{
 		Id: result.ID.String(),
-	}, nil
+	}.Build(), nil
 }
 
 // protoToCreateSecretInput преобразует protobuf-секрет
@@ -114,37 +114,37 @@ func protoToCreateSecretInput(secret *pb.Secret) (service.CreateSecretInput, err
 		data       any
 	)
 
-	switch payload := secret.GetPayload().(type) {
-	case *pb.Secret_Text:
+	switch secret.WhichPayload() {
+	case pb.Secret_Text_case:
 		secretType = models.SecretText
 
 		data = &models.TextSecret{
-			Text: payload.Text.GetText(),
+			Text: secret.GetText().GetText(),
 		}
 
-	case *pb.Secret_LoginPassword:
+	case pb.Secret_LoginPassword_case:
 		secretType = models.SecretLogin
 
 		data = &models.LoginPasswordSecret{
-			Login:    payload.LoginPassword.GetLogin(),
-			Password: payload.LoginPassword.GetPassword(),
+			Login:    secret.GetLoginPassword().GetLogin(),
+			Password: secret.GetLoginPassword().GetPassword(),
 		}
 
-	case *pb.Secret_BankCard:
+	case pb.Secret_BankCard_case:
 		secretType = models.SecretCard
 
 		data = &models.CardSecret{
-			Number: payload.BankCard.GetNumber(),
-			Holder: payload.BankCard.GetHolder(),
-			Expire: payload.BankCard.GetExpire(),
-			CVV:    payload.BankCard.GetCvv(),
+			Number: secret.GetBankCard().GetNumber(),
+			Holder: secret.GetBankCard().GetHolder(),
+			Expire: secret.GetBankCard().GetExpire(),
+			CVV:    secret.GetBankCard().GetCvv(),
 		}
 
-	case *pb.Secret_Binary:
+	case pb.Secret_Binary_case:
 		secretType = models.SecretBinary
 		binarySecret := &models.BinarySecret{
-			Filename: payload.Binary.GetFilename(),
-			MIMEType: payload.Binary.GetMimeType(),
+			Filename: secret.GetBinary().GetFilename(),
+			MIMEType: secret.GetBinary().GetMimeType(),
 		}
 
 		metadata, err := json.Marshal(binarySecret)
@@ -284,38 +284,38 @@ func protoToUpdateSecretInput(secretID uuid.UUID, secret *pb.Secret) (service.Up
 		data       any
 	)
 
-	switch payload := secret.GetPayload().(type) {
-	case *pb.Secret_Text:
+	switch secret.WhichPayload() {
+	case pb.Secret_Text_case:
 		secretType = models.SecretText
 
 		data = &models.TextSecret{
-			Text: payload.Text.GetText(),
+			Text: secret.GetText().GetText(),
 		}
 
-	case *pb.Secret_LoginPassword:
+	case pb.Secret_LoginPassword_case:
 		secretType = models.SecretLogin
 
 		data = &models.LoginPasswordSecret{
-			Login:    payload.LoginPassword.GetLogin(),
-			Password: payload.LoginPassword.GetPassword(),
+			Login:    secret.GetLoginPassword().GetLogin(),
+			Password: secret.GetLoginPassword().GetPassword(),
 		}
 
-	case *pb.Secret_BankCard:
+	case pb.Secret_BankCard_case:
 		secretType = models.SecretCard
 
 		data = &models.CardSecret{
-			Number: payload.BankCard.GetNumber(),
-			Holder: payload.BankCard.GetHolder(),
-			Expire: payload.BankCard.GetExpire(),
-			CVV:    payload.BankCard.GetCvv(),
+			Number: secret.GetBankCard().GetNumber(),
+			Holder: secret.GetBankCard().GetHolder(),
+			Expire: secret.GetBankCard().GetExpire(),
+			CVV:    secret.GetBankCard().GetCvv(),
 		}
 
-	case *pb.Secret_Binary:
+	case pb.Secret_Binary_case:
 		secretType = models.SecretBinary
 
 		data = &models.BinarySecret{
-			Filename: payload.Binary.GetFilename(),
-			MIMEType: payload.Binary.GetMimeType(),
+			Filename: secret.GetBinary().GetFilename(),
+			MIMEType: secret.GetBinary().GetMimeType(),
 		}
 
 	default:
@@ -381,9 +381,9 @@ func (s *SecretServer) GetSecret(ctx context.Context, req *pb.GetSecretRequest) 
 
 	s.logger.Info("secret retrieved", "ownerId", ownerID, "secretId", secretID, "type", secret.Type)
 
-	return &pb.GetSecretResponse{
+	return pb.GetSecretResponse_builder{
 		Secret: result,
-	}, nil
+	}.Build(), nil
 }
 
 // domainToProtoSecret преобразует внутреннюю модель секрета
@@ -392,43 +392,35 @@ func (s *SecretServer) GetSecret(ctx context.Context, req *pb.GetSecretRequest) 
 // Бинарные данные не передаются через SecretService.
 // Для их получения используется BinaryService.DownloadBinary.
 func domainToProtoSecret(secret *models.Secret, data any) (*pb.Secret, error) {
-	result := &pb.Secret{
+	result := pb.Secret_builder{
 		Metadata: domainMetadataToProto(secret),
-	}
+	}.Build()
 
 	switch value := data.(type) {
 	case *models.TextSecret:
-		result.Payload = &pb.Secret_Text{
-			Text: &pb.TextSecret{
-				Text: value.Text,
-			},
-		}
+		result.SetText(pb.TextSecret_builder{
+			Text: value.Text,
+		}.Build())
 
 	case *models.LoginPasswordSecret:
-		result.Payload = &pb.Secret_LoginPassword{
-			LoginPassword: &pb.LoginPasswordSecret{
-				Login:    value.Login,
-				Password: value.Password,
-			},
-		}
+		result.SetLoginPassword(pb.LoginPasswordSecret_builder{
+			Login:    value.Login,
+			Password: value.Password,
+		}.Build())
 
 	case *models.CardSecret:
-		result.Payload = &pb.Secret_BankCard{
-			BankCard: &pb.BankCardSecret{
-				Number: value.Number,
-				Holder: value.Holder,
-				Expire: value.Expire,
-				Cvv:    value.CVV,
-			},
-		}
+		result.SetBankCard(pb.BankCardSecret_builder{
+			Number: value.Number,
+			Holder: value.Holder,
+			Expire: value.Expire,
+			Cvv:    value.CVV,
+		}.Build())
 
 	case *models.BinarySecret:
-		result.Payload = &pb.Secret_Binary{
-			Binary: &pb.BinarySecret{
-				Filename: value.Filename,
-				MimeType: value.MIMEType,
-			},
-		}
+		result.SetBinary(pb.BinarySecret_builder{
+			Filename: value.Filename,
+			MimeType: value.MIMEType,
+		}.Build())
 
 	case []byte:
 		// Для binary data сейчас ничего не возвращаем через GetSecret.
@@ -467,15 +459,15 @@ func (s *SecretServer) ListSecrets(ctx context.Context, req *pb.ListSecretsReque
 		return nil, mapSecretError(err)
 	}
 
-	response := &pb.ListSecretsResponse{
+	response := pb.ListSecretsResponse_builder{
 		Secrets: make([]*pb.SecretMetadata, 0, len(secrets)),
-	}
+	}.Build()
 
 	for _, secret := range secrets {
-		response.Secrets = append(
-			response.Secrets,
+		response.SetSecrets(append(
+			response.GetSecrets(),
 			domainMetadataToProto(secret),
-		)
+		))
 	}
 
 	s.logger.Info("secrets listed", "ownerId", ownerID, "count", len(secrets))
@@ -516,12 +508,12 @@ func (s *SecretServer) DeleteSecret(ctx context.Context, req *pb.DeleteSecretReq
 // domainMetadataToProto преобразует metadata секрета
 // из внутренней модели в protobuf.
 func domainMetadataToProto(secret *models.Secret) *pb.SecretMetadata {
-	return &pb.SecretMetadata{
+	return pb.SecretMetadata_builder{
 		Id:        secret.ID.String(),
 		Type:      secretTypeToProto(secret.Type),
 		CreatedAt: timestamppb.New(secret.CreatedAt),
 		UpdatedAt: timestamppb.New(secret.UpdatedAt),
-	}
+	}.Build()
 }
 
 // secretTypeToProto преобразует внутренний тип секрета

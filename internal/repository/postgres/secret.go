@@ -2,22 +2,23 @@ package postgres
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
 	"github.com/onbehalfofhim/secrets-keeper/internal/models"
 	"github.com/onbehalfofhim/secrets-keeper/internal/repository"
 )
 
 // SecretRepository представляет репозиторий для работы с секретами.
 type SecretRepository struct {
-	db *sql.DB
+	db DB
 }
 
 // NewSecretRepository создаёт новый репозиторий секретов
 // с указанным подключением к PostgreSQL.
-func NewSecretRepository(db *sql.DB) *SecretRepository {
+func NewSecretRepository(db DB) *SecretRepository {
 	return &SecretRepository{db: db}
 }
 
@@ -54,7 +55,7 @@ func (r *SecretRepository) Create(ctx context.Context, secret *models.Secret) (*
 		secret.Metadata = []byte(`{}`)
 	}
 
-	row := r.db.QueryRowContext(
+	row := r.db.QueryRow(
 		ctx,
 		query,
 		secret.ID,
@@ -103,7 +104,7 @@ func (r *SecretRepository) GetByID(ctx context.Context, ownerID, secretID uuid.U
 		  AND owner_id = $2
 	`
 
-	row := r.db.QueryRowContext(
+	row := r.db.QueryRow(
 		ctx,
 		query,
 		secretID,
@@ -122,7 +123,7 @@ func (r *SecretRepository) GetByID(ctx context.Context, ownerID, secretID uuid.U
 		&secret.UpdatedAt,
 	)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, repository.ErrSecretNotFound
 		}
 
@@ -151,7 +152,7 @@ func (r *SecretRepository) List(ctx context.Context, ownerID uuid.UUID) ([]*mode
 		ORDER BY created_at DESC
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, ownerID)
+	rows, err := r.db.Query(ctx, query, ownerID)
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +216,7 @@ func (r *SecretRepository) Update(ctx context.Context, secret *models.Secret) (*
 		secret.Metadata = []byte(`{}`)
 	}
 
-	row := r.db.QueryRowContext(
+	row := r.db.QueryRow(
 		ctx,
 		query,
 		secret.Type,
@@ -237,7 +238,7 @@ func (r *SecretRepository) Update(ctx context.Context, secret *models.Secret) (*
 		&result.UpdatedAt,
 	)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, repository.ErrSecretNotFound
 		}
 
@@ -259,7 +260,7 @@ func (r *SecretRepository) Delete(ctx context.Context, ownerID, secretID uuid.UU
 		  AND owner_id = $2
 	`
 
-	result, err := r.db.ExecContext(
+	result, err := r.db.Exec(
 		ctx,
 		query,
 		secretID,
@@ -269,10 +270,7 @@ func (r *SecretRepository) Delete(ctx context.Context, ownerID, secretID uuid.UU
 		return err
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
+	rowsAffected := result.RowsAffected()
 
 	if rowsAffected == 0 {
 		return repository.ErrSecretNotFound
@@ -295,7 +293,7 @@ func (r *SecretRepository) UpdateEncryptedData(ctx context.Context, ownerID uuid
 		  AND owner_id = $3
 	`
 
-	result, err := r.db.ExecContext(
+	result, err := r.db.Exec(
 		ctx,
 		query,
 		encryptedData,
@@ -306,10 +304,7 @@ func (r *SecretRepository) UpdateEncryptedData(ctx context.Context, ownerID uuid
 		return err
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
+	rowsAffected := result.RowsAffected()
 
 	if rowsAffected == 0 {
 		return repository.ErrSecretNotFound

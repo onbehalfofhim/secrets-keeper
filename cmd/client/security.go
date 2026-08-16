@@ -36,10 +36,10 @@ func runSecurityTests(
 
 	_, err := authClient.Register(
 		ctx,
-		&pb.RegisterRequest{
+		pb.RegisterRequest_builder{
 			Login:    loginA,
 			Password: passwordA,
-		},
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf("register user A failed: %v", err)
@@ -47,10 +47,10 @@ func runSecurityTests(
 
 	loginResponseA, err := authClient.Login(
 		ctx,
-		&pb.LoginRequest{
+		pb.LoginRequest_builder{
 			Login:    loginA,
 			Password: passwordA,
-		},
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf("login user A failed: %v", err)
@@ -75,10 +75,10 @@ func runSecurityTests(
 
 	_, err = authClient.Register(
 		ctx,
-		&pb.RegisterRequest{
+		pb.RegisterRequest_builder{
 			Login:    loginB,
 			Password: passwordB,
-		},
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf("register user B failed: %v", err)
@@ -86,10 +86,10 @@ func runSecurityTests(
 
 	loginResponseB, err := authClient.Login(
 		ctx,
-		&pb.LoginRequest{
+		pb.LoginRequest_builder{
 			Login:    loginB,
 			Password: passwordB,
-		},
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf("login user B failed: %v", err)
@@ -113,15 +113,13 @@ func runSecurityTests(
 
 	createAResponse, err := secretClient.CreateSecret(
 		ctxA,
-		&pb.CreateSecretRequest{
-			Secret: &pb.Secret{
-				Payload: &pb.Secret_Text{
-					Text: &pb.TextSecret{
-						Text: secretAText,
-					},
-				},
-			},
-		},
+		pb.CreateSecretRequest_builder{
+			Secret: pb.Secret_builder{
+				Text: pb.TextSecret_builder{
+					Text: secretAText,
+				}.Build(),
+			}.Build(),
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf("User A create secret failed: %v", err)
@@ -143,15 +141,13 @@ func runSecurityTests(
 
 	createBResponse, err := secretClient.CreateSecret(
 		ctxB,
-		&pb.CreateSecretRequest{
-			Secret: &pb.Secret{
-				Payload: &pb.Secret_Text{
-					Text: &pb.TextSecret{
-						Text: secretBText,
-					},
-				},
-			},
-		},
+		pb.CreateSecretRequest_builder{
+			Secret: pb.Secret_builder{
+				Text: pb.TextSecret_builder{
+					Text: secretBText,
+				}.Build(),
+			}.Build(),
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf("User B create secret failed: %v", err)
@@ -171,9 +167,9 @@ func runSecurityTests(
 
 	response, err := secretClient.GetSecret(
 		ctxA,
-		&pb.GetSecretRequest{
+		pb.GetSecretRequest_builder{
 			Id: secretAID,
-		},
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf("User A cannot access own secret: %v", err)
@@ -201,9 +197,9 @@ func runSecurityTests(
 
 	response, err = secretClient.GetSecret(
 		ctxB,
-		&pb.GetSecretRequest{
+		pb.GetSecretRequest_builder{
 			Id: secretBID,
-		},
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf("User B cannot access own secret: %v", err)
@@ -231,9 +227,9 @@ func runSecurityTests(
 
 	_, err = secretClient.GetSecret(
 		ctxB,
-		&pb.GetSecretRequest{
+		pb.GetSecretRequest_builder{
 			Id: secretAID,
-		},
+		}.Build(),
 	)
 
 	assertNotFound(
@@ -252,9 +248,9 @@ func runSecurityTests(
 
 	_, err = secretClient.GetSecret(
 		ctxA,
-		&pb.GetSecretRequest{
+		pb.GetSecretRequest_builder{
 			Id: secretBID,
-		},
+		}.Build(),
 	)
 
 	assertNotFound(
@@ -273,18 +269,16 @@ func runSecurityTests(
 
 	_, err = secretClient.UpdateSecret(
 		ctxB,
-		&pb.UpdateSecretRequest{
-			Secret: &pb.Secret{
-				Metadata: &pb.SecretMetadata{
+		pb.UpdateSecretRequest_builder{
+			Secret: pb.Secret_builder{
+				Metadata: pb.SecretMetadata_builder{
 					Id: secretAID,
-				},
-				Payload: &pb.Secret_Text{
-					Text: &pb.TextSecret{
-						Text: "HACKED BY USER B",
-					},
-				},
-			},
-		},
+				}.Build(),
+				Text: pb.TextSecret_builder{
+					Text: "HACKED BY USER B",
+				}.Build(),
+			}.Build(),
+		}.Build(),
 	)
 
 	assertNotFound(
@@ -303,9 +297,9 @@ func runSecurityTests(
 
 	response, err = secretClient.GetSecret(
 		ctxA,
-		&pb.GetSecretRequest{
+		pb.GetSecretRequest_builder{
 			Id: secretAID,
-		},
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf(
@@ -334,18 +328,16 @@ func runSecurityTests(
 
 	_, err = secretClient.UpdateSecret(
 		ctxA,
-		&pb.UpdateSecretRequest{
-			Secret: &pb.Secret{
-				Metadata: &pb.SecretMetadata{
+		pb.UpdateSecretRequest_builder{
+			Secret: pb.Secret_builder{
+				Metadata: pb.SecretMetadata_builder{
 					Id: secretBID,
-				},
-				Payload: &pb.Secret_Text{
-					Text: &pb.TextSecret{
-						Text: "HACKED BY USER A",
-					},
-				},
-			},
-		},
+				}.Build(),
+				Text: pb.TextSecret_builder{
+					Text: "HACKED BY USER A",
+				}.Build(),
+			}.Build(),
+		}.Build(),
 	)
 
 	assertNotFound(
@@ -364,9 +356,9 @@ func runSecurityTests(
 
 	_, err = secretClient.DeleteSecret(
 		ctxB,
-		&pb.DeleteSecretRequest{
+		pb.DeleteSecretRequest_builder{
 			Id: secretAID,
-		},
+		}.Build(),
 	)
 
 	assertNotFound(
@@ -385,9 +377,9 @@ func runSecurityTests(
 
 	_, err = secretClient.GetSecret(
 		ctxA,
-		&pb.GetSecretRequest{
+		pb.GetSecretRequest_builder{
 			Id: secretAID,
-		},
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf(
@@ -407,9 +399,9 @@ func runSecurityTests(
 
 	_, err = secretClient.DeleteSecret(
 		ctxA,
-		&pb.DeleteSecretRequest{
+		pb.DeleteSecretRequest_builder{
 			Id: secretBID,
-		},
+		}.Build(),
 	)
 
 	assertNotFound(
@@ -486,16 +478,14 @@ func runSecurityTests(
 
 	binaryCreateResponse, err := secretClient.CreateSecret(
 		ctxA,
-		&pb.CreateSecretRequest{
-			Secret: &pb.Secret{
-				Payload: &pb.Secret_Binary{
-					Binary: &pb.BinarySecret{
-						Filename: "user-a-secret.txt",
-						MimeType: "text/plain",
-					},
-				},
-			},
-		},
+		pb.CreateSecretRequest_builder{
+			Secret: pb.Secret_builder{
+				Binary: pb.BinarySecret_builder{
+					Filename: "user-a-secret.txt",
+					MimeType: "text/plain",
+				}.Build(),
+			}.Build(),
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf(

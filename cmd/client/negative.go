@@ -33,10 +33,10 @@ func runNegativeGRPCTests(
 
 	_, err := authClient.Register(
 		ctx,
-		&pb.RegisterRequest{
+		pb.RegisterRequest_builder{
 			Login:    login,
 			Password: password,
-		},
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf("failed to create negative-test user: %v", err)
@@ -44,10 +44,10 @@ func runNegativeGRPCTests(
 
 	loginResponse, err := authClient.Login(
 		ctx,
-		&pb.LoginRequest{
+		pb.LoginRequest_builder{
 			Login:    login,
 			Password: password,
-		},
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf("failed to login negative-test user: %v", err)
@@ -110,10 +110,10 @@ func runNegativeAuthTests(
 
 	_, err := authClient.Register(
 		ctx,
-		&pb.RegisterRequest{
+		pb.RegisterRequest_builder{
 			Login:    "",
 			Password: "password",
-		},
+		}.Build(),
 	)
 
 	assertCode(
@@ -133,10 +133,10 @@ func runNegativeAuthTests(
 
 	_, err = authClient.Register(
 		ctx,
-		&pb.RegisterRequest{
+		pb.RegisterRequest_builder{
 			Login:    uniqueLogin("empty-password"),
 			Password: "",
-		},
+		}.Build(),
 	)
 
 	assertCode(
@@ -158,10 +158,10 @@ func runNegativeAuthTests(
 
 	_, err = authClient.Register(
 		ctx,
-		&pb.RegisterRequest{
+		pb.RegisterRequest_builder{
 			Login:    login,
 			Password: "password",
-		},
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf(
@@ -172,10 +172,10 @@ func runNegativeAuthTests(
 
 	_, err = authClient.Register(
 		ctx,
-		&pb.RegisterRequest{
+		pb.RegisterRequest_builder{
 			Login:    login,
 			Password: "password",
-		},
+		}.Build(),
 	)
 
 	assertCode(
@@ -195,10 +195,10 @@ func runNegativeAuthTests(
 
 	_, err = authClient.Login(
 		ctx,
-		&pb.LoginRequest{
+		pb.LoginRequest_builder{
 			Login:    login,
 			Password: "wrong-password",
-		},
+		}.Build(),
 	)
 
 	assertCode(
@@ -218,10 +218,10 @@ func runNegativeAuthTests(
 
 	_, err = authClient.Login(
 		ctx,
-		&pb.LoginRequest{
+		pb.LoginRequest_builder{
 			Login:    uniqueLogin("does-not-exist"),
 			Password: "password",
-		},
+		}.Build(),
 	)
 
 	assertCode(
@@ -241,10 +241,10 @@ func runNegativeAuthTests(
 
 	_, err = authClient.Login(
 		ctx,
-		&pb.LoginRequest{
+		pb.LoginRequest_builder{
 			Login:    "",
 			Password: "password",
-		},
+		}.Build(),
 	)
 
 	assertCode(
@@ -264,10 +264,10 @@ func runNegativeAuthTests(
 
 	_, err = authClient.Login(
 		ctx,
-		&pb.LoginRequest{
+		pb.LoginRequest_builder{
 			Login:    uniqueLogin("empty-login-password"),
 			Password: "",
-		},
+		}.Build(),
 	)
 
 	assertCode(
@@ -297,9 +297,9 @@ func runNegativeSecretTests(
 
 	_, err := secretClient.CreateSecret(
 		authCtx,
-		&pb.CreateSecretRequest{
+		pb.CreateSecretRequest_builder{
 			Secret: nil,
-		},
+		}.Build(),
 	)
 
 	assertCode(
@@ -319,9 +319,9 @@ func runNegativeSecretTests(
 
 	_, err = secretClient.CreateSecret(
 		authCtx,
-		&pb.CreateSecretRequest{
+		pb.CreateSecretRequest_builder{
 			Secret: &pb.Secret{},
-		},
+		}.Build(),
 	)
 
 	assertCode(
@@ -341,9 +341,9 @@ func runNegativeSecretTests(
 
 	_, err = secretClient.GetSecret(
 		authCtx,
-		&pb.GetSecretRequest{
+		pb.GetSecretRequest_builder{
 			Id: "not-a-uuid",
-		},
+		}.Build(),
 	)
 
 	assertCode(
@@ -363,9 +363,9 @@ func runNegativeSecretTests(
 
 	_, err = secretClient.GetSecret(
 		authCtx,
-		&pb.GetSecretRequest{
+		pb.GetSecretRequest_builder{
 			Id: "00000000-0000-0000-0000-000000000001",
-		},
+		}.Build(),
 	)
 
 	assertCode(
@@ -385,9 +385,9 @@ func runNegativeSecretTests(
 
 	_, err = secretClient.UpdateSecret(
 		authCtx,
-		&pb.UpdateSecretRequest{
+		pb.UpdateSecretRequest_builder{
 			Secret: nil,
-		},
+		}.Build(),
 	)
 
 	assertCode(
@@ -407,15 +407,13 @@ func runNegativeSecretTests(
 
 	_, err = secretClient.UpdateSecret(
 		authCtx,
-		&pb.UpdateSecretRequest{
-			Secret: &pb.Secret{
-				Payload: &pb.Secret_Text{
-					Text: &pb.TextSecret{
-						Text: "updated",
-					},
-				},
-			},
-		},
+		pb.UpdateSecretRequest_builder{
+			Secret: pb.Secret_builder{
+				Text: pb.TextSecret_builder{
+					Text: "updated",
+				}.Build(),
+			}.Build(),
+		}.Build(),
 	)
 
 	assertCode(
@@ -435,18 +433,16 @@ func runNegativeSecretTests(
 
 	_, err = secretClient.UpdateSecret(
 		authCtx,
-		&pb.UpdateSecretRequest{
-			Secret: &pb.Secret{
-				Metadata: &pb.SecretMetadata{
+		pb.UpdateSecretRequest_builder{
+			Secret: pb.Secret_builder{
+				Metadata: pb.SecretMetadata_builder{
 					Id: "00000000-0000-0000-0000-000000000002",
-				},
-				Payload: &pb.Secret_Text{
-					Text: &pb.TextSecret{
-						Text: "updated",
-					},
-				},
-			},
-		},
+				}.Build(),
+				Text: pb.TextSecret_builder{
+					Text: "updated",
+				}.Build(),
+			}.Build(),
+		}.Build(),
 	)
 
 	assertCode(
@@ -466,9 +462,9 @@ func runNegativeSecretTests(
 
 	_, err = secretClient.DeleteSecret(
 		authCtx,
-		&pb.DeleteSecretRequest{
+		pb.DeleteSecretRequest_builder{
 			Id: "not-a-uuid",
-		},
+		}.Build(),
 	)
 
 	assertCode(
@@ -488,9 +484,9 @@ func runNegativeSecretTests(
 
 	_, err = secretClient.DeleteSecret(
 		authCtx,
-		&pb.DeleteSecretRequest{
+		pb.DeleteSecretRequest_builder{
 			Id: "00000000-0000-0000-0000-000000000003",
-		},
+		}.Build(),
 	)
 
 	assertCode(
@@ -553,10 +549,10 @@ func runNegativeBinaryTests(
 	}
 
 	err = stream.Send(
-		&pb.UploadBinaryChunk{
+		pb.UploadBinaryChunk_builder{
 			SecretId: "",
 			Chunk:    []byte("test"),
-		},
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf(
@@ -591,10 +587,10 @@ func runNegativeBinaryTests(
 	}
 
 	err = stream.Send(
-		&pb.UploadBinaryChunk{
+		pb.UploadBinaryChunk_builder{
 			SecretId: "not-a-uuid",
 			Chunk:    []byte("test"),
-		},
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf(
@@ -629,10 +625,10 @@ func runNegativeBinaryTests(
 	}
 
 	err = stream.Send(
-		&pb.UploadBinaryChunk{
+		pb.UploadBinaryChunk_builder{
 			SecretId: "00000000-0000-0000-0000-000000000010",
 			Chunk:    []byte("test"),
-		},
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf(
@@ -660,15 +656,13 @@ func runNegativeBinaryTests(
 
 	response, err := secretClient.CreateSecret(
 		authCtx,
-		&pb.CreateSecretRequest{
-			Secret: &pb.Secret{
-				Payload: &pb.Secret_Text{
-					Text: &pb.TextSecret{
-						Text: "not a binary secret",
-					},
-				},
-			},
-		},
+		pb.CreateSecretRequest_builder{
+			Secret: pb.Secret_builder{
+				Text: pb.TextSecret_builder{
+					Text: "not a binary secret",
+				}.Build(),
+			}.Build(),
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf(
@@ -697,10 +691,10 @@ func runNegativeBinaryTests(
 	}
 
 	err = stream.Send(
-		&pb.UploadBinaryChunk{
+		pb.UploadBinaryChunk_builder{
 			SecretId: textSecretID,
 			Chunk:    []byte("this must fail"),
-		},
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf(
@@ -728,9 +722,9 @@ func runNegativeBinaryTests(
 
 	downloadStream, err := binaryClient.DownloadBinary(
 		authCtx,
-		&pb.DownloadBinaryRequest{
+		pb.DownloadBinaryRequest_builder{
 			SecretId: "not-a-uuid",
-		},
+		}.Build(),
 	)
 	if err == nil {
 		// В server-streaming RPC ошибка может возникнуть не на самом
@@ -755,9 +749,9 @@ func runNegativeBinaryTests(
 
 	downloadStream, err = binaryClient.DownloadBinary(
 		authCtx,
-		&pb.DownloadBinaryRequest{
+		pb.DownloadBinaryRequest_builder{
 			SecretId: "00000000-0000-0000-0000-000000000011",
-		},
+		}.Build(),
 	)
 	if err == nil {
 		err = receiveExpectedStreamError(downloadStream)
@@ -780,9 +774,9 @@ func runNegativeBinaryTests(
 
 	downloadStream, err = binaryClient.DownloadBinary(
 		authCtx,
-		&pb.DownloadBinaryRequest{
+		pb.DownloadBinaryRequest_builder{
 			SecretId: textSecretID,
-		},
+		}.Build(),
 	)
 	if err == nil {
 		err = receiveExpectedStreamError(downloadStream)
@@ -805,16 +799,14 @@ func runNegativeBinaryTests(
 
 	response, err = secretClient.CreateSecret(
 		authCtx,
-		&pb.CreateSecretRequest{
-			Secret: &pb.Secret{
-				Payload: &pb.Secret_Binary{
-					Binary: &pb.BinarySecret{
-						Filename: "not-uploaded.txt",
-						MimeType: "text/plain",
-					},
-				},
-			},
-		},
+		pb.CreateSecretRequest_builder{
+			Secret: pb.Secret_builder{
+				Binary: pb.BinarySecret_builder{
+					Filename: "not-uploaded.txt",
+					MimeType: "text/plain",
+				}.Build(),
+			}.Build(),
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf(
@@ -836,9 +828,9 @@ func runNegativeBinaryTests(
 
 	downloadStream, err = binaryClient.DownloadBinary(
 		authCtx,
-		&pb.DownloadBinaryRequest{
+		pb.DownloadBinaryRequest_builder{
 			SecretId: binarySecretID,
-		},
+		}.Build(),
 	)
 	if err == nil {
 		err = receiveExpectedStreamError(downloadStream)
@@ -869,10 +861,10 @@ func runNegativeBinaryTests(
 
 	// Первый chunk содержит один secret_id.
 	err = stream.Send(
-		&pb.UploadBinaryChunk{
+		pb.UploadBinaryChunk_builder{
 			SecretId: binarySecretID,
 			Chunk:    []byte("first chunk"),
-		},
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf(
@@ -883,10 +875,10 @@ func runNegativeBinaryTests(
 
 	// Второй chunk содержит другой secret_id.
 	err = stream.Send(
-		&pb.UploadBinaryChunk{
+		pb.UploadBinaryChunk_builder{
 			SecretId: textSecretID,
 			Chunk:    []byte("second chunk"),
-		},
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf(

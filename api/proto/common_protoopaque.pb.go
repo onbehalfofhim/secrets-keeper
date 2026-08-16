@@ -4,6 +4,8 @@
 // 	protoc        v7.35.1
 // source: common.proto
 
+//go:build protoopaque
+
 package proto
 
 import (

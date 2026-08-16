@@ -107,10 +107,10 @@ func TestAuthServer_Register(t *testing.T) {
 	}{
 		{
 			name: "success",
-			request: &pb.RegisterRequest{
+			request: pb.RegisterRequest_builder{
 				Login:    "test-user",
 				Password: "password",
-			},
+			}.Build(),
 			createFunc: func(
 				ctx context.Context,
 				login, passwordHash string,
@@ -126,26 +126,26 @@ func TestAuthServer_Register(t *testing.T) {
 		},
 		{
 			name: "invalid login",
-			request: &pb.RegisterRequest{
+			request: pb.RegisterRequest_builder{
 				Login:    "",
 				Password: "password",
-			},
+			}.Build(),
 			wantCode: codes.InvalidArgument,
 		},
 		{
 			name: "invalid password",
-			request: &pb.RegisterRequest{
+			request: pb.RegisterRequest_builder{
 				Login:    "test-user",
 				Password: "",
-			},
+			}.Build(),
 			wantCode: codes.InvalidArgument,
 		},
 		{
 			name: "user already exists",
-			request: &pb.RegisterRequest{
+			request: pb.RegisterRequest_builder{
 				Login:    "existing-user",
 				Password: "password",
-			},
+			}.Build(),
 			createFunc: func(
 				ctx context.Context,
 				login, passwordHash string,
@@ -156,10 +156,10 @@ func TestAuthServer_Register(t *testing.T) {
 		},
 		{
 			name: "internal error",
-			request: &pb.RegisterRequest{
+			request: pb.RegisterRequest_builder{
 				Login:    "test-user",
 				Password: "password",
-			},
+			}.Build(),
 			createFunc: func(
 				ctx context.Context,
 				login, passwordHash string,
@@ -192,10 +192,10 @@ func TestAuthServer_Register(t *testing.T) {
 					t.Fatal("expected response, got nil")
 				}
 
-				if response.UserId != tt.wantUserID {
+				if response.GetUserId() != tt.wantUserID {
 					t.Errorf(
 						"UserId = %q, want %q",
-						response.UserId,
+						response.GetUserId(),
 						tt.wantUserID,
 					)
 				}
@@ -262,10 +262,10 @@ func TestAuthServer_Login(t *testing.T) {
 	}{
 		{
 			name: "success",
-			request: &pb.LoginRequest{
+			request: pb.LoginRequest_builder{
 				Login:    "test-user",
 				Password: password,
-			},
+			}.Build(),
 			getByLoginFunc: func(
 				ctx context.Context,
 				login string,
@@ -280,26 +280,26 @@ func TestAuthServer_Login(t *testing.T) {
 		},
 		{
 			name: "empty login",
-			request: &pb.LoginRequest{
+			request: pb.LoginRequest_builder{
 				Login:    "",
 				Password: password,
-			},
+			}.Build(),
 			wantCode: codes.Unauthenticated,
 		},
 		{
 			name: "empty password",
-			request: &pb.LoginRequest{
+			request: pb.LoginRequest_builder{
 				Login:    "test-user",
 				Password: "",
-			},
+			}.Build(),
 			wantCode: codes.Unauthenticated,
 		},
 		{
 			name: "user not found",
-			request: &pb.LoginRequest{
+			request: pb.LoginRequest_builder{
 				Login:    "unknown",
 				Password: password,
-			},
+			}.Build(),
 			getByLoginFunc: func(
 				ctx context.Context,
 				login string,
@@ -310,10 +310,10 @@ func TestAuthServer_Login(t *testing.T) {
 		},
 		{
 			name: "wrong password",
-			request: &pb.LoginRequest{
+			request: pb.LoginRequest_builder{
 				Login:    "test-user",
 				Password: "wrong-password",
-			},
+			}.Build(),
 			getByLoginFunc: func(
 				ctx context.Context,
 				login string,
@@ -328,10 +328,10 @@ func TestAuthServer_Login(t *testing.T) {
 		},
 		{
 			name: "repository error",
-			request: &pb.LoginRequest{
+			request: pb.LoginRequest_builder{
 				Login:    "test-user",
 				Password: password,
-			},
+			}.Build(),
 			getByLoginFunc: func(
 				ctx context.Context,
 				login string,
@@ -364,16 +364,16 @@ func TestAuthServer_Login(t *testing.T) {
 					t.Fatal("expected response, got nil")
 				}
 
-				if response.AccessToken == "" {
+				if response.GetAccessToken() == "" {
 					t.Error("expected non-empty access token")
 				}
 
 				expectedExpiresIn := int64(time.Hour.Seconds())
 
-				if response.ExpiresIn != expectedExpiresIn {
+				if response.GetExpiresIn() != expectedExpiresIn {
 					t.Errorf(
 						"ExpiresIn = %d, want %d",
-						response.ExpiresIn,
+						response.GetExpiresIn(),
 						expectedExpiresIn,
 					)
 				}

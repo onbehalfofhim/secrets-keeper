@@ -40,8 +40,8 @@ Secrets Keeper — сервис для безопасного хранения �
 | gRPC | взаимодействие клиента и сервера |
 | Protocol Buffers | описание API |
 | PostgreSQL | постоянное хранение данных |
-| `database/sql` | работа с PostgreSQL |
-| pgx | PostgreSQL driver |
+| pgx/v5 | PostgreSQL driver и connection pool |
+| pgxpool | пул соединений с PostgreSQL |
 | JWT | аутентификация |
 | AES-256-GCM | шифрование секретов |
 | Cobra | CLI |

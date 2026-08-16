@@ -2,25 +2,30 @@ package postgres
 
 import (
 	"context"
-	"database/sql"
+	"encoding/json"
 	"errors"
 	"regexp"
 	"testing"
 	"time"
 
-	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/google/uuid"
+	"github.com/pashagolub/pgxmock/v5"
 
 	"github.com/onbehalfofhim/secrets-keeper/internal/models"
 	"github.com/onbehalfofhim/secrets-keeper/internal/repository"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
-func setupSecretRepository(t *testing.T) (*SecretRepository, sqlmock.Sqlmock, func()) {
+func setupSecretRepository(
+	t *testing.T,
+) (*SecretRepository, pgxmock.PgxPoolIface, func()) {
 	t.Helper()
 
-	db, mock, err := sqlmock.New()
+	db, err := pgxmock.NewPool()
 	if err != nil {
-		t.Fatalf("failed to create sqlmock: %v", err)
+		t.Fatalf("failed to create pgxmock pool: %v", err)
 	}
 
 	repo := NewSecretRepository(db)
@@ -29,13 +34,13 @@ func setupSecretRepository(t *testing.T) (*SecretRepository, sqlmock.Sqlmock, fu
 		db.Close()
 	}
 
-	return repo, mock, cleanup
+	return repo, db, cleanup
 }
 
 func TestNewSecretRepository(t *testing.T) {
-	db, _, err := sqlmock.New()
+	db, err := pgxmock.NewPool()
 	if err != nil {
-		t.Fatalf("failed to create sqlmock: %v", err)
+		t.Fatalf("failed to create pgxmock pool: %v", err)
 	}
 	defer db.Close()
 
@@ -44,16 +49,12 @@ func TestNewSecretRepository(t *testing.T) {
 	if repo == nil {
 		t.Fatal("expected repository, got nil")
 	}
-
-	if repo.db != db {
-		t.Error("repository contains unexpected database")
-	}
 }
 
 func TestSecretRepository_Create(t *testing.T) {
-	db, mock, err := sqlmock.New()
+	db, err := pgxmock.NewPool()
 	if err != nil {
-		t.Fatalf("sqlmock.New(): %v", err)
+		t.Fatalf("pgxmock.NewPool(): %v", err)
 	}
 	defer db.Close()
 
@@ -72,7 +73,7 @@ func TestSecretRepository_Create(t *testing.T) {
 	createdAt := time.Now()
 	updatedAt := createdAt
 
-	rows := sqlmock.NewRows([]string{
+	rows := pgxmock.NewRows([]string{
 		"id",
 		"owner_id",
 		"type",
@@ -90,7 +91,7 @@ func TestSecretRepository_Create(t *testing.T) {
 		updatedAt,
 	)
 
-	mock.ExpectQuery(regexp.QuoteMeta(`
+	db.ExpectQuery(regexp.QuoteMeta(`
 		INSERT INTO secrets (
 			id,
 			owner_id,
@@ -109,11 +110,11 @@ func TestSecretRepository_Create(t *testing.T) {
 			updated_at
 	`)).
 		WithArgs(
-			sqlmock.AnyArg(),
+			pgxmock.AnyArg(),
 			ownerID,
 			models.SecretText,
 			[]byte("encrypted"),
-			[]byte(`{}`),
+			json.RawMessage(`{}`),
 		).
 		WillReturnRows(rows)
 
@@ -124,6 +125,10 @@ func TestSecretRepository_Create(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("expected result, got nil")
 	}
 
 	if result.ID == uuid.Nil {
@@ -152,13 +157,13 @@ func TestSecretRepository_Create(t *testing.T) {
 		)
 	}
 
-	if err := mock.ExpectationsWereMet(); err != nil {
+	if err := db.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet expectations: %v", err)
 	}
 }
 
 func TestSecretRepository_Create_Error(t *testing.T) {
-	repo, mock, cleanup := setupSecretRepository(t)
+	repo, db, cleanup := setupSecretRepository(t)
 	defer cleanup()
 
 	secret := &models.Secret{
@@ -171,7 +176,7 @@ func TestSecretRepository_Create_Error(t *testing.T) {
 
 	dbErr := errors.New("database error")
 
-	mock.ExpectQuery(regexp.QuoteMeta(`
+	db.ExpectQuery(regexp.QuoteMeta(`
 		INSERT INTO secrets (
 			id,
 			owner_id,
@@ -198,7 +203,10 @@ func TestSecretRepository_Create_Error(t *testing.T) {
 		).
 		WillReturnError(dbErr)
 
-	got, err := repo.Create(context.Background(), secret)
+	got, err := repo.Create(
+		context.Background(),
+		secret,
+	)
 
 	if !errors.Is(err, dbErr) {
 		t.Errorf("expected %v, got %v", dbErr, err)
@@ -208,8 +216,8 @@ func TestSecretRepository_Create_Error(t *testing.T) {
 		t.Errorf("expected nil secret, got %+v", got)
 	}
 
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("unmet SQL expectations: %v", err)
+	if err := db.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet expectations: %v", err)
 	}
 }
 
@@ -223,14 +231,14 @@ func TestSecretRepository_GetByID(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		mock    func(sqlmock.Sqlmock)
+		mock    func(pgxmock.PgxPoolIface)
 		want    *models.Secret
 		wantErr error
 	}{
 		{
 			name: "success",
-			mock: func(mock sqlmock.Sqlmock) {
-				rows := sqlmock.NewRows([]string{
+			mock: func(db pgxmock.PgxPoolIface) {
+				rows := pgxmock.NewRows([]string{
 					"id",
 					"owner_id",
 					"type",
@@ -248,7 +256,7 @@ func TestSecretRepository_GetByID(t *testing.T) {
 					updatedAt,
 				)
 
-				mock.ExpectQuery(regexp.QuoteMeta(`
+				db.ExpectQuery(regexp.QuoteMeta(`
 					SELECT
 						id,
 						owner_id,
@@ -276,8 +284,8 @@ func TestSecretRepository_GetByID(t *testing.T) {
 		},
 		{
 			name: "not found",
-			mock: func(mock sqlmock.Sqlmock) {
-				mock.ExpectQuery(regexp.QuoteMeta(`
+			mock: func(db pgxmock.PgxPoolIface) {
+				db.ExpectQuery(regexp.QuoteMeta(`
 					SELECT
 						id,
 						owner_id,
@@ -291,16 +299,16 @@ func TestSecretRepository_GetByID(t *testing.T) {
 					  AND owner_id = $2
 				`)).
 					WithArgs(secretID, ownerID).
-					WillReturnError(sql.ErrNoRows)
+					WillReturnError(pgx.ErrNoRows)
 			},
 			wantErr: repository.ErrSecretNotFound,
 		},
 		{
 			name: "database error",
-			mock: func(mock sqlmock.Sqlmock) {
+			mock: func(db pgxmock.PgxPoolIface) {
 				dbErr := errors.New("database error")
 
-				mock.ExpectQuery(regexp.QuoteMeta(`
+				db.ExpectQuery(regexp.QuoteMeta(`
 					SELECT
 						id,
 						owner_id,
@@ -322,12 +330,16 @@ func TestSecretRepository_GetByID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo, mock, cleanup := setupSecretRepository(t)
+			repo, db, cleanup := setupSecretRepository(t)
 			defer cleanup()
 
-			tt.mock(mock)
+			tt.mock(db)
 
-			got, err := repo.GetByID(ctx, ownerID, secretID)
+			got, err := repo.GetByID(
+				ctx,
+				ownerID,
+				secretID,
+			)
 
 			if tt.wantErr != nil {
 				if err == nil {
@@ -335,7 +347,10 @@ func TestSecretRepository_GetByID(t *testing.T) {
 				}
 
 				if tt.wantErr == repository.ErrSecretNotFound {
-					if !errors.Is(err, repository.ErrSecretNotFound) {
+					if !errors.Is(
+						err,
+						repository.ErrSecretNotFound,
+					) {
 						t.Errorf(
 							"expected ErrSecretNotFound, got %v",
 							err,
@@ -350,14 +365,20 @@ func TestSecretRepository_GetByID(t *testing.T) {
 				}
 
 				if got != nil {
-					t.Errorf("expected nil secret, got %+v", got)
+					t.Errorf(
+						"expected nil secret, got %+v",
+						got,
+					)
 				}
 			} else {
 				assertSecretEqual(t, got, tt.want)
 			}
 
-			if err := mock.ExpectationsWereMet(); err != nil {
-				t.Errorf("unmet SQL expectations: %v", err)
+			if err := db.ExpectationsWereMet(); err != nil {
+				t.Errorf(
+					"unmet expectations: %v",
+					err,
+				)
 			}
 		})
 	}
@@ -388,14 +409,13 @@ func TestSecretRepository_List(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
-		rows    *sqlmock.Rows
-		want    []*models.Secret
-		wantErr bool
+		name string
+		rows *pgxmock.Rows
+		want []*models.Secret
 	}{
 		{
 			name: "multiple secrets",
-			rows: sqlmock.NewRows([]string{
+			rows: pgxmock.NewRows([]string{
 				"id",
 				"owner_id",
 				"type",
@@ -429,7 +449,7 @@ func TestSecretRepository_List(t *testing.T) {
 		},
 		{
 			name: "empty result",
-			rows: sqlmock.NewRows([]string{
+			rows: pgxmock.NewRows([]string{
 				"id",
 				"owner_id",
 				"type",
@@ -444,10 +464,10 @@ func TestSecretRepository_List(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo, mock, cleanup := setupSecretRepository(t)
+			repo, db, cleanup := setupSecretRepository(t)
 			defer cleanup()
 
-			mock.ExpectQuery(regexp.QuoteMeta(`
+			db.ExpectQuery(regexp.QuoteMeta(`
 				SELECT
 					id,
 					owner_id,
@@ -465,15 +485,11 @@ func TestSecretRepository_List(t *testing.T) {
 
 			got, err := repo.List(ctx, ownerID)
 
-			if tt.wantErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
-				return
-			}
-
 			if err != nil {
-				t.Fatalf("List() error = %v", err)
+				t.Fatalf(
+					"List() error = %v",
+					err,
+				)
 			}
 
 			if len(got) != len(tt.want) {
@@ -485,24 +501,31 @@ func TestSecretRepository_List(t *testing.T) {
 			}
 
 			for i := range tt.want {
-				assertSecretEqual(t, got[i], tt.want[i])
+				assertSecretEqual(
+					t,
+					got[i],
+					tt.want[i],
+				)
 			}
 
-			if err := mock.ExpectationsWereMet(); err != nil {
-				t.Errorf("unmet SQL expectations: %v", err)
+			if err := db.ExpectationsWereMet(); err != nil {
+				t.Errorf(
+					"unmet expectations: %v",
+					err,
+				)
 			}
 		})
 	}
 }
 
 func TestSecretRepository_List_QueryError(t *testing.T) {
-	repo, mock, cleanup := setupSecretRepository(t)
+	repo, db, cleanup := setupSecretRepository(t)
 	defer cleanup()
 
 	ownerID := uuid.New()
 	dbErr := errors.New("database error")
 
-	mock.ExpectQuery(regexp.QuoteMeta(`
+	db.ExpectQuery(regexp.QuoteMeta(`
 		SELECT
 			id,
 			owner_id,
@@ -518,28 +541,41 @@ func TestSecretRepository_List_QueryError(t *testing.T) {
 		WithArgs(ownerID).
 		WillReturnError(dbErr)
 
-	got, err := repo.List(context.Background(), ownerID)
+	got, err := repo.List(
+		context.Background(),
+		ownerID,
+	)
 
 	if !errors.Is(err, dbErr) {
-		t.Errorf("expected %v, got %v", dbErr, err)
+		t.Errorf(
+			"expected %v, got %v",
+			dbErr,
+			err,
+		)
 	}
 
 	if got != nil {
-		t.Errorf("expected nil result, got %+v", got)
+		t.Errorf(
+			"expected nil result, got %+v",
+			got,
+		)
 	}
 
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("unmet SQL expectations: %v", err)
+	if err := db.ExpectationsWereMet(); err != nil {
+		t.Errorf(
+			"unmet expectations: %v",
+			err,
+		)
 	}
 }
 
 func TestSecretRepository_List_ScanError(t *testing.T) {
-	repo, mock, cleanup := setupSecretRepository(t)
+	repo, db, cleanup := setupSecretRepository(t)
 	defer cleanup()
 
 	ownerID := uuid.New()
 
-	rows := sqlmock.NewRows([]string{
+	rows := pgxmock.NewRows([]string{
 		"id",
 		"owner_id",
 		"type",
@@ -557,7 +593,7 @@ func TestSecretRepository_List_ScanError(t *testing.T) {
 		time.Now(),
 	)
 
-	mock.ExpectQuery(regexp.QuoteMeta(`
+	db.ExpectQuery(regexp.QuoteMeta(`
 		SELECT
 			id,
 			owner_id,
@@ -573,29 +609,38 @@ func TestSecretRepository_List_ScanError(t *testing.T) {
 		WithArgs(ownerID).
 		WillReturnRows(rows)
 
-	got, err := repo.List(context.Background(), ownerID)
+	got, err := repo.List(
+		context.Background(),
+		ownerID,
+	)
 
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
 
 	if got != nil {
-		t.Errorf("expected nil result, got %+v", got)
+		t.Errorf(
+			"expected nil result, got %+v",
+			got,
+		)
 	}
 
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("unmet SQL expectations: %v", err)
+	if err := db.ExpectationsWereMet(); err != nil {
+		t.Errorf(
+			"unmet expectations: %v",
+			err,
+		)
 	}
 }
 
 func TestSecretRepository_List_RowsError(t *testing.T) {
-	repo, mock, cleanup := setupSecretRepository(t)
+	repo, db, cleanup := setupSecretRepository(t)
 	defer cleanup()
 
 	ownerID := uuid.New()
 	rowsErr := errors.New("rows error")
 
-	rows := sqlmock.NewRows([]string{
+	rows := pgxmock.NewRows([]string{
 		"id",
 		"owner_id",
 		"type",
@@ -615,7 +660,7 @@ func TestSecretRepository_List_RowsError(t *testing.T) {
 		).
 		RowError(0, rowsErr)
 
-	mock.ExpectQuery(regexp.QuoteMeta(`
+	db.ExpectQuery(regexp.QuoteMeta(`
 		SELECT
 			id,
 			owner_id,
@@ -631,18 +676,31 @@ func TestSecretRepository_List_RowsError(t *testing.T) {
 		WithArgs(ownerID).
 		WillReturnRows(rows)
 
-	got, err := repo.List(context.Background(), ownerID)
+	got, err := repo.List(
+		context.Background(),
+		ownerID,
+	)
 
 	if !errors.Is(err, rowsErr) {
-		t.Errorf("expected %v, got %v", rowsErr, err)
+		t.Errorf(
+			"expected %v, got %v",
+			rowsErr,
+			err,
+		)
 	}
 
 	if got != nil {
-		t.Errorf("expected nil result, got %+v", got)
+		t.Errorf(
+			"expected nil result, got %+v",
+			got,
+		)
 	}
 
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("unmet SQL expectations: %v", err)
+	if err := db.ExpectationsWereMet(); err != nil {
+		t.Errorf(
+			"unmet expectations: %v",
+			err,
+		)
 	}
 }
 
@@ -657,9 +715,8 @@ func TestSecretRepository_Update(t *testing.T) {
 	tests := []struct {
 		name     string
 		secret   *models.Secret
-		mockRows func(sqlmock.Sqlmock, *models.Secret)
+		mockRows func(pgxmock.PgxPoolIface, *models.Secret)
 		want     *models.Secret
-		wantErr  error
 	}{
 		{
 			name: "success",
@@ -670,8 +727,11 @@ func TestSecretRepository_Update(t *testing.T) {
 				EncryptedData: []byte("encrypted"),
 				Metadata:      []byte(`{"name":"test"}`),
 			},
-			mockRows: func(mock sqlmock.Sqlmock, secret *models.Secret) {
-				rows := sqlmock.NewRows([]string{
+			mockRows: func(
+				db pgxmock.PgxPoolIface,
+				secret *models.Secret,
+			) {
+				rows := pgxmock.NewRows([]string{
 					"id",
 					"owner_id",
 					"type",
@@ -689,7 +749,7 @@ func TestSecretRepository_Update(t *testing.T) {
 					updatedAt,
 				)
 
-				mock.ExpectQuery(regexp.QuoteMeta(`
+				db.ExpectQuery(regexp.QuoteMeta(`
 					UPDATE secrets
 					SET
 						type = $1,
@@ -735,8 +795,11 @@ func TestSecretRepository_Update(t *testing.T) {
 				EncryptedData: []byte("encrypted"),
 				Metadata:      nil,
 			},
-			mockRows: func(mock sqlmock.Sqlmock, secret *models.Secret) {
-				rows := sqlmock.NewRows([]string{
+			mockRows: func(
+				db pgxmock.PgxPoolIface,
+				secret *models.Secret,
+			) {
+				rows := pgxmock.NewRows([]string{
 					"id",
 					"owner_id",
 					"type",
@@ -754,7 +817,7 @@ func TestSecretRepository_Update(t *testing.T) {
 					updatedAt,
 				)
 
-				mock.ExpectQuery(regexp.QuoteMeta(`
+				db.ExpectQuery(regexp.QuoteMeta(`
 					UPDATE secrets
 					SET
 						type = $1,
@@ -775,7 +838,7 @@ func TestSecretRepository_Update(t *testing.T) {
 					WithArgs(
 						secret.Type,
 						secret.EncryptedData,
-						[]byte(`{}`),
+						json.RawMessage(`{}`),
 						secret.ID,
 						secret.OwnerID,
 					).
@@ -795,35 +858,41 @@ func TestSecretRepository_Update(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo, mock, cleanup := setupSecretRepository(t)
+			repo, db, cleanup := setupSecretRepository(t)
 			defer cleanup()
 
-			tt.mockRows(mock, tt.secret)
+			tt.mockRows(db, tt.secret)
 
-			got, err := repo.Update(ctx, tt.secret)
-
-			if tt.wantErr != nil {
-				if !errors.Is(err, tt.wantErr) {
-					t.Errorf("expected %v, got %v", tt.wantErr, err)
-				}
-				return
-			}
+			got, err := repo.Update(
+				ctx,
+				tt.secret,
+			)
 
 			if err != nil {
-				t.Fatalf("Update() error = %v", err)
+				t.Fatalf(
+					"Update() error = %v",
+					err,
+				)
 			}
 
-			assertSecretEqual(t, got, tt.want)
+			assertSecretEqual(
+				t,
+				got,
+				tt.want,
+			)
 
-			if err := mock.ExpectationsWereMet(); err != nil {
-				t.Errorf("unmet SQL expectations: %v", err)
+			if err := db.ExpectationsWereMet(); err != nil {
+				t.Errorf(
+					"unmet expectations: %v",
+					err,
+				)
 			}
 		})
 	}
 }
 
 func TestSecretRepository_Update_NotFound(t *testing.T) {
-	repo, mock, cleanup := setupSecretRepository(t)
+	repo, db, cleanup := setupSecretRepository(t)
 	defer cleanup()
 
 	secret := &models.Secret{
@@ -834,7 +903,7 @@ func TestSecretRepository_Update_NotFound(t *testing.T) {
 		Metadata:      []byte(`{}`),
 	}
 
-	mock.ExpectQuery(regexp.QuoteMeta(`
+	db.ExpectQuery(regexp.QuoteMeta(`
 		UPDATE secrets
 		SET
 			type = $1,
@@ -859,9 +928,12 @@ func TestSecretRepository_Update_NotFound(t *testing.T) {
 			secret.ID,
 			secret.OwnerID,
 		).
-		WillReturnError(sql.ErrNoRows)
+		WillReturnError(pgx.ErrNoRows)
 
-	got, err := repo.Update(context.Background(), secret)
+	got, err := repo.Update(
+		context.Background(),
+		secret,
+	)
 
 	if !errors.Is(err, repository.ErrSecretNotFound) {
 		t.Errorf(
@@ -871,16 +943,22 @@ func TestSecretRepository_Update_NotFound(t *testing.T) {
 	}
 
 	if got != nil {
-		t.Errorf("expected nil secret, got %+v", got)
+		t.Errorf(
+			"expected nil secret, got %+v",
+			got,
+		)
 	}
 
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("unmet SQL expectations: %v", err)
+	if err := db.ExpectationsWereMet(); err != nil {
+		t.Errorf(
+			"unmet expectations: %v",
+			err,
+		)
 	}
 }
 
 func TestSecretRepository_Update_DatabaseError(t *testing.T) {
-	repo, mock, cleanup := setupSecretRepository(t)
+	repo, db, cleanup := setupSecretRepository(t)
 	defer cleanup()
 
 	secret := &models.Secret{
@@ -893,7 +971,7 @@ func TestSecretRepository_Update_DatabaseError(t *testing.T) {
 
 	dbErr := errors.New("database error")
 
-	mock.ExpectQuery(regexp.QuoteMeta(`
+	db.ExpectQuery(regexp.QuoteMeta(`
 		UPDATE secrets
 		SET
 			type = $1,
@@ -920,18 +998,31 @@ func TestSecretRepository_Update_DatabaseError(t *testing.T) {
 		).
 		WillReturnError(dbErr)
 
-	got, err := repo.Update(context.Background(), secret)
+	got, err := repo.Update(
+		context.Background(),
+		secret,
+	)
 
 	if !errors.Is(err, dbErr) {
-		t.Errorf("expected %v, got %v", dbErr, err)
+		t.Errorf(
+			"expected %v, got %v",
+			dbErr,
+			err,
+		)
 	}
 
 	if got != nil {
-		t.Errorf("expected nil secret, got %+v", got)
+		t.Errorf(
+			"expected nil secret, got %+v",
+			got,
+		)
 	}
 
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("unmet SQL expectations: %v", err)
+	if err := db.ExpectationsWereMet(); err != nil {
+		t.Errorf(
+			"unmet expectations: %v",
+			err,
+		)
 	}
 }
 
@@ -943,17 +1034,17 @@ func TestSecretRepository_Delete(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		result     sql.Result
+		result     pgconn.CommandTag
 		queryError error
 		wantErr    error
 	}{
 		{
 			name:   "success",
-			result: sqlmock.NewResult(0, 1),
+			result: pgxmock.NewResult("DELETE", 1),
 		},
 		{
 			name:    "secret not found",
-			result:  sqlmock.NewResult(0, 0),
+			result:  pgxmock.NewResult("DELETE", 0),
 			wantErr: repository.ErrSecretNotFound,
 		},
 		{
@@ -965,35 +1056,18 @@ func TestSecretRepository_Delete(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo, mock, cleanup := setupSecretRepository(t)
+			repo, db, cleanup := setupSecretRepository(t)
 			defer cleanup()
 
-			mock.ExpectExec(regexp.QuoteMeta(`
+			expectation := db.ExpectExec(regexp.QuoteMeta(`
 				DELETE FROM secrets
 				WHERE id = $1
 				  AND owner_id = $2
 			`)).
-				WithArgs(secretID, ownerID)
-
-			expect := mock.ExpectationsWereMet
-
-			// Reconfigure expectation with result/error.
-			// sqlmock does not allow modifying an existing expectation,
-			// so recreate the repository/mock for this case.
-			_ = expect
-
-			// The expectation above is replaced by using a fresh mock.
-			cleanup()
-
-			repo, mock, cleanup = setupSecretRepository(t)
-			defer cleanup()
-
-			expectation := mock.ExpectExec(regexp.QuoteMeta(`
-				DELETE FROM secrets
-				WHERE id = $1
-				  AND owner_id = $2
-			`)).
-				WithArgs(secretID, ownerID)
+				WithArgs(
+					secretID,
+					ownerID,
+				)
 
 			if tt.queryError != nil {
 				expectation.WillReturnError(tt.queryError)
@@ -1001,7 +1075,11 @@ func TestSecretRepository_Delete(t *testing.T) {
 				expectation.WillReturnResult(tt.result)
 			}
 
-			err := repo.Delete(ctx, ownerID, secretID)
+			err := repo.Delete(
+				ctx,
+				ownerID,
+				secretID,
+			)
 
 			if tt.wantErr != nil {
 				if err == nil {
@@ -1009,7 +1087,10 @@ func TestSecretRepository_Delete(t *testing.T) {
 				}
 
 				if tt.wantErr == repository.ErrSecretNotFound {
-					if !errors.Is(err, repository.ErrSecretNotFound) {
+					if !errors.Is(
+						err,
+						repository.ErrSecretNotFound,
+					) {
 						t.Errorf(
 							"expected ErrSecretNotFound, got %v",
 							err,
@@ -1023,45 +1104,19 @@ func TestSecretRepository_Delete(t *testing.T) {
 					)
 				}
 			} else if err != nil {
-				t.Fatalf("unexpected error: %v", err)
+				t.Fatalf(
+					"unexpected error: %v",
+					err,
+				)
 			}
 
-			if err := mock.ExpectationsWereMet(); err != nil {
-				t.Errorf("unmet SQL expectations: %v", err)
+			if err := db.ExpectationsWereMet(); err != nil {
+				t.Errorf(
+					"unmet expectations: %v",
+					err,
+				)
 			}
 		})
-	}
-}
-
-func TestSecretRepository_Delete_RowsAffectedError(t *testing.T) {
-	repo, mock, cleanup := setupSecretRepository(t)
-	defer cleanup()
-
-	ownerID := uuid.New()
-	secretID := uuid.New()
-
-	result := sqlmock.NewErrorResult(errors.New("rows affected error"))
-
-	mock.ExpectExec(regexp.QuoteMeta(`
-		DELETE FROM secrets
-		WHERE id = $1
-		  AND owner_id = $2
-	`)).
-		WithArgs(secretID, ownerID).
-		WillReturnResult(result)
-
-	err := repo.Delete(context.Background(), ownerID, secretID)
-
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-
-	if err.Error() != "rows affected error" {
-		t.Errorf("unexpected error: %v", err)
-	}
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("unmet SQL expectations: %v", err)
 	}
 }
 
@@ -1074,17 +1129,17 @@ func TestSecretRepository_UpdateEncryptedData(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		result     sql.Result
+		result     pgconn.CommandTag
 		queryError error
 		wantErr    error
 	}{
 		{
 			name:   "success",
-			result: sqlmock.NewResult(0, 1),
+			result: pgxmock.NewResult("UPDATE", 1),
 		},
 		{
 			name:    "secret not found",
-			result:  sqlmock.NewResult(0, 0),
+			result:  pgxmock.NewResult("UPDATE", 0),
 			wantErr: repository.ErrSecretNotFound,
 		},
 		{
@@ -1096,17 +1151,21 @@ func TestSecretRepository_UpdateEncryptedData(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo, mock, cleanup := setupSecretRepository(t)
+			repo, db, cleanup := setupSecretRepository(t)
 			defer cleanup()
 
-			expectation := mock.ExpectExec(regexp.QuoteMeta(`
+			expectation := db.ExpectExec(regexp.QuoteMeta(`
 				UPDATE secrets
 				SET encrypted_data = $1,
 				    updated_at = NOW()
 				WHERE id = $2
 				  AND owner_id = $3
 			`)).
-				WithArgs(encryptedData, secretID, ownerID)
+				WithArgs(
+					encryptedData,
+					secretID,
+					ownerID,
+				)
 
 			if tt.queryError != nil {
 				expectation.WillReturnError(tt.queryError)
@@ -1127,7 +1186,10 @@ func TestSecretRepository_UpdateEncryptedData(t *testing.T) {
 				}
 
 				if tt.wantErr == repository.ErrSecretNotFound {
-					if !errors.Is(err, repository.ErrSecretNotFound) {
+					if !errors.Is(
+						err,
+						repository.ErrSecretNotFound,
+					) {
 						t.Errorf(
 							"expected ErrSecretNotFound, got %v",
 							err,
@@ -1141,57 +1203,26 @@ func TestSecretRepository_UpdateEncryptedData(t *testing.T) {
 					)
 				}
 			} else if err != nil {
-				t.Fatalf("unexpected error: %v", err)
+				t.Fatalf(
+					"unexpected error: %v",
+					err,
+				)
 			}
 
-			if err := mock.ExpectationsWereMet(); err != nil {
-				t.Errorf("unmet SQL expectations: %v", err)
+			if err := db.ExpectationsWereMet(); err != nil {
+				t.Errorf(
+					"unmet expectations: %v",
+					err,
+				)
 			}
 		})
 	}
 }
 
-func TestSecretRepository_UpdateEncryptedData_RowsAffectedError(t *testing.T) {
-	repo, mock, cleanup := setupSecretRepository(t)
-	defer cleanup()
-
-	ownerID := uuid.New()
-	secretID := uuid.New()
-	encryptedData := []byte("encrypted")
-
-	result := sqlmock.NewErrorResult(errors.New("rows affected error"))
-
-	mock.ExpectExec(regexp.QuoteMeta(`
-		UPDATE secrets
-		SET encrypted_data = $1,
-		    updated_at = NOW()
-		WHERE id = $2
-		  AND owner_id = $3
-	`)).
-		WithArgs(encryptedData, secretID, ownerID).
-		WillReturnResult(result)
-
-	err := repo.UpdateEncryptedData(
-		context.Background(),
-		ownerID,
-		secretID,
-		encryptedData,
-	)
-
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-
-	if err.Error() != "rows affected error" {
-		t.Errorf("unexpected error: %v", err)
-	}
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("unmet SQL expectations: %v", err)
-	}
-}
-
-func assertSecretEqual(t *testing.T, got, want *models.Secret) {
+func assertSecretEqual(
+	t *testing.T,
+	got, want *models.Secret,
+) {
 	t.Helper()
 
 	if got == nil {
@@ -1203,18 +1234,31 @@ func assertSecretEqual(t *testing.T, got, want *models.Secret) {
 	}
 
 	if got.ID != want.ID {
-		t.Errorf("ID = %v, want %v", got.ID, want.ID)
+		t.Errorf(
+			"ID = %v, want %v",
+			got.ID,
+			want.ID,
+		)
 	}
 
 	if got.OwnerID != want.OwnerID {
-		t.Errorf("OwnerID = %v, want %v", got.OwnerID, want.OwnerID)
+		t.Errorf(
+			"OwnerID = %v, want %v",
+			got.OwnerID,
+			want.OwnerID,
+		)
 	}
 
 	if got.Type != want.Type {
-		t.Errorf("Type = %q, want %q", got.Type, want.Type)
+		t.Errorf(
+			"Type = %q, want %q",
+			got.Type,
+			want.Type,
+		)
 	}
 
-	if string(got.EncryptedData) != string(want.EncryptedData) {
+	if string(got.EncryptedData) !=
+		string(want.EncryptedData) {
 		t.Errorf(
 			"EncryptedData = %q, want %q",
 			got.EncryptedData,
@@ -1222,7 +1266,8 @@ func assertSecretEqual(t *testing.T, got, want *models.Secret) {
 		)
 	}
 
-	if string(got.Metadata) != string(want.Metadata) {
+	if string(got.Metadata) !=
+		string(want.Metadata) {
 		t.Errorf(
 			"Metadata = %q, want %q",
 			got.Metadata,

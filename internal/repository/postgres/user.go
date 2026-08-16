@@ -2,23 +2,26 @@ package postgres
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+
 	"github.com/onbehalfofhim/secrets-keeper/internal/models"
 	"github.com/onbehalfofhim/secrets-keeper/internal/repository"
 )
 
 // UserRepository представляет репозиторий для работы с пользователями.
 type UserRepository struct {
-	db *sql.DB
+	db DB
 }
 
 // NewUsersRepository создает новый репозиторий пользователей.
-func NewUsersRepository(db *sql.DB) *UserRepository {
-	return &UserRepository{db: db}
+func NewUsersRepository(db DB) *UserRepository {
+	return &UserRepository{
+		db: db,
+	}
 }
 
 // Create создание пользователя в БД.
@@ -28,7 +31,7 @@ func (r *UserRepository) Create(ctx context.Context, login, passwordHash string)
 		RETURNING id, login, password_hash, created_at
 	`
 
-	row := r.db.QueryRowContext(ctx, query, uuid.New(), login, passwordHash)
+	row := r.db.QueryRow(ctx, query, uuid.New(), login, passwordHash)
 
 	var user models.User
 	err := row.Scan(
@@ -65,7 +68,7 @@ func (r *UserRepository) GetByLogin(ctx context.Context, login string) (*models.
 		WHERE login = $1
 	`
 
-	row := r.db.QueryRowContext(ctx, query, login)
+	row := r.db.QueryRow(ctx, query, login)
 
 	var user models.User
 	err := row.Scan(
@@ -76,7 +79,7 @@ func (r *UserRepository) GetByLogin(ctx context.Context, login string) (*models.
 	)
 
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, repository.ErrUserNotFound
 		}
 		return nil, err
@@ -96,7 +99,7 @@ func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Use
 		WHERE id = $1
 	`
 
-	row := r.db.QueryRowContext(ctx, query, id)
+	row := r.db.QueryRow(ctx, query, id)
 
 	var user models.User
 	err := row.Scan(
@@ -107,7 +110,7 @@ func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Use
 	)
 
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, repository.ErrUserNotFound
 		}
 		return nil, err

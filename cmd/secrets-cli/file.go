@@ -107,10 +107,10 @@ func uploadFile(app *App, secretID string, filePath string) error {
 			)
 
 			err := stream.Send(
-				&pb.UploadBinaryChunk{
+				pb.UploadBinaryChunk_builder{
 					SecretId: secretID,
 					Chunk:    chunkData,
-				},
+				}.Build(),
 			)
 			if err != nil {
 				return clitool.FormatGRPCError(err)
@@ -153,9 +153,9 @@ func downloadFile(app *App, secretID string, filePath string) error {
 
 	stream, err := app.client.Binary.DownloadBinary(
 		ctx,
-		&pb.DownloadBinaryRequest{
+		pb.DownloadBinaryRequest_builder{
 			SecretId: secretID,
-		},
+		}.Build(),
 	)
 	if err != nil {
 		return clitool.FormatGRPCError(err)

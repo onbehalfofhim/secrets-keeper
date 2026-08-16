@@ -13,6 +13,7 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		// "failed to set environment variables"
+		os.Exit(1)
 	}
 
 	app := NewApp(cfg, buildinfo.Get())

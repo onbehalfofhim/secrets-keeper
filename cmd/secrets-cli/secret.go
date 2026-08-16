@@ -174,9 +174,9 @@ func createSecret(app *App, flags *secretFlags) error {
 
 	response, err := app.client.Secret.CreateSecret(
 		ctx,
-		&pb.CreateSecretRequest{
+		pb.CreateSecretRequest_builder{
 			Secret: secret,
-		},
+		}.Build(),
 	)
 	if err != nil {
 		return clitool.FormatGRPCError(err)
@@ -208,13 +208,11 @@ func buildSecret(flags *secretFlags) (*pb.Secret, error) {
 			return nil, fmt.Errorf("text value is required")
 		}
 
-		return &pb.Secret{
-			Payload: &pb.Secret_Text{
-				Text: &pb.TextSecret{
-					Text: flags.textValue,
-				},
-			},
-		}, nil
+		return pb.Secret_builder{
+			Text: pb.TextSecret_builder{
+				Text: flags.textValue,
+			}.Build(),
+		}.Build(), nil
 
 	case "login":
 		if flags.loginValue == "" {
@@ -225,14 +223,12 @@ func buildSecret(flags *secretFlags) (*pb.Secret, error) {
 			return nil, fmt.Errorf("password value is required")
 		}
 
-		return &pb.Secret{
-			Payload: &pb.Secret_LoginPassword{
-				LoginPassword: &pb.LoginPasswordSecret{
-					Login:    flags.loginValue,
-					Password: flags.passwordValue,
-				},
-			},
-		}, nil
+		return pb.Secret_builder{
+			LoginPassword: pb.LoginPasswordSecret_builder{
+				Login:    flags.loginValue,
+				Password: flags.passwordValue,
+			}.Build(),
+		}.Build(), nil
 
 	case "card":
 		if flags.cardNumber == "" {
@@ -251,16 +247,14 @@ func buildSecret(flags *secretFlags) (*pb.Secret, error) {
 			return nil, fmt.Errorf("card CVV is required")
 		}
 
-		return &pb.Secret{
-			Payload: &pb.Secret_BankCard{
-				BankCard: &pb.BankCardSecret{
-					Number: flags.cardNumber,
-					Holder: flags.cardHolder,
-					Expire: flags.cardExpire,
-					Cvv:    flags.cardCVV,
-				},
-			},
-		}, nil
+		return pb.Secret_builder{
+			BankCard: pb.BankCardSecret_builder{
+				Number: flags.cardNumber,
+				Holder: flags.cardHolder,
+				Expire: flags.cardExpire,
+				Cvv:    flags.cardCVV,
+			}.Build(),
+		}.Build(), nil
 
 	case "binary":
 		if flags.filename == "" {
@@ -271,14 +265,12 @@ func buildSecret(flags *secretFlags) (*pb.Secret, error) {
 			return nil, fmt.Errorf("mime-type is required")
 		}
 
-		return &pb.Secret{
-			Payload: &pb.Secret_Binary{
-				Binary: &pb.BinarySecret{
-					Filename: flags.filename,
-					MimeType: flags.mimeType,
-				},
-			},
-		}, nil
+		return pb.Secret_builder{
+			Binary: pb.BinarySecret_builder{
+				Filename: flags.filename,
+				MimeType: flags.mimeType,
+			}.Build(),
+		}.Build(), nil
 
 	default:
 		return nil, fmt.Errorf(
@@ -299,9 +291,9 @@ func getSecret(app *App, id string) error {
 
 	response, err := app.client.Secret.GetSecret(
 		ctx,
-		&pb.GetSecretRequest{
+		pb.GetSecretRequest_builder{
 			Id: id,
-		},
+		}.Build(),
 	)
 	if err != nil {
 		return clitool.FormatGRPCError(err)
@@ -371,15 +363,15 @@ func updateSecret(app *App, id string, flags *secretFlags) error {
 	}
 
 	// UpdateSecret использует ID из metadata.
-	secret.Metadata = &pb.SecretMetadata{
+	secret.SetMetadata(pb.SecretMetadata_builder{
 		Id: id,
-	}
+	}.Build())
 
 	_, err = app.client.Secret.UpdateSecret(
 		ctx,
-		&pb.UpdateSecretRequest{
+		pb.UpdateSecretRequest_builder{
 			Secret: secret,
-		},
+		}.Build(),
 	)
 	if err != nil {
 		return clitool.FormatGRPCError(err)
@@ -400,9 +392,9 @@ func deleteSecret(app *App, id string) error {
 
 	_, err = app.client.Secret.DeleteSecret(
 		ctx,
-		&pb.DeleteSecretRequest{
+		pb.DeleteSecretRequest_builder{
 			Id: id,
-		},
+		}.Build(),
 	)
 	if err != nil {
 		return clitool.FormatGRPCError(err)
@@ -445,49 +437,49 @@ func printSecret(secret *pb.Secret) {
 
 	fmt.Println()
 
-	switch payload := secret.GetPayload().(type) {
-	case *pb.Secret_Text:
+	switch secret.WhichPayload() {
+	case pb.Secret_Text_case:
 		fmt.Println(
 			"Text:",
-			payload.Text.GetText(),
+			secret.GetText().GetText(),
 		)
 
-	case *pb.Secret_LoginPassword:
+	case pb.Secret_LoginPassword_case:
 		fmt.Println(
 			"Login:",
-			payload.LoginPassword.GetLogin(),
+			secret.GetLoginPassword().GetLogin(),
 		)
 		fmt.Println(
 			"Password:",
-			payload.LoginPassword.GetPassword(),
+			secret.GetLoginPassword().GetPassword(),
 		)
 
-	case *pb.Secret_BankCard:
+	case pb.Secret_BankCard_case:
 		fmt.Println(
 			"Number:",
-			payload.BankCard.GetNumber(),
+			secret.GetBankCard().GetNumber(),
 		)
 		fmt.Println(
 			"Holder:",
-			payload.BankCard.GetHolder(),
+			secret.GetBankCard().GetHolder(),
 		)
 		fmt.Println(
 			"Expire:",
-			payload.BankCard.GetExpire(),
+			secret.GetBankCard().GetExpire(),
 		)
 		fmt.Println(
 			"CVV:",
-			payload.BankCard.GetCvv(),
+			secret.GetBankCard().GetCvv(),
 		)
 
-	case *pb.Secret_Binary:
+	case pb.Secret_Binary_case:
 		fmt.Println(
 			"Filename:",
-			payload.Binary.GetFilename(),
+			secret.GetBinary().GetFilename(),
 		)
 		fmt.Println(
 			"MIME type:",
-			payload.Binary.GetMimeType(),
+			secret.GetBinary().GetMimeType(),
 		)
 
 	default:

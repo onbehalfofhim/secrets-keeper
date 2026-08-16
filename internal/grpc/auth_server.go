@@ -47,9 +47,9 @@ func (s *AuthServer) Register(ctx context.Context, req *pb.RegisterRequest) (*pb
 
 	s.logger.Info("user registered", "userId", user.ID, "login", user.Login)
 
-	return &pb.RegisterResponse{
+	return pb.RegisterResponse_builder{
 		UserId: user.ID.String(),
-	}, nil
+	}.Build(), nil
 }
 
 // Login выполняет аутентификацию пользователя.
@@ -69,10 +69,10 @@ func (s *AuthServer) Login(ctx context.Context, req *pb.LoginRequest) (*pb.Login
 
 	s.logger.Info("user logged in", "login", login, "expiresIn", result.ExpiresIn)
 
-	return &pb.LoginResponse{
+	return pb.LoginResponse_builder{
 		AccessToken: result.AccessToken,
 		ExpiresIn:   result.ExpiresIn,
-	}, nil
+	}.Build(), nil
 }
 
 // mapAuthError преобразует внутренние ошибки auth/service

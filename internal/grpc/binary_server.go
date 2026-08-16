@@ -194,9 +194,9 @@ func (s *BinaryServer) DownloadBinary(req *pb.DownloadBinaryRequest, stream pb.B
 		}
 
 		err := stream.Send(
-			&pb.DownloadBinaryChunk{
+			pb.DownloadBinaryChunk_builder{
 				Chunk: data[offset:end],
-			},
+			}.Build(),
 		)
 		if err != nil {
 			return status.Errorf(

@@ -66,10 +66,10 @@ func registerUser(app *App) error {
 
 	response, err := app.client.Auth.Register(
 		ctx,
-		&pb.RegisterRequest{
+		pb.RegisterRequest_builder{
 			Login:    login,
 			Password: password,
-		},
+		}.Build(),
 	)
 	if err != nil {
 		return clitool.FormatGRPCError(err)
@@ -94,10 +94,10 @@ func loginUser(app *App) error {
 
 	response, err := app.client.Auth.Login(
 		ctx,
-		&pb.LoginRequest{
+		pb.LoginRequest_builder{
 			Login:    login,
 			Password: password,
-		},
+		}.Build(),
 	)
 	if err != nil {
 		return clitool.FormatGRPCError(err)

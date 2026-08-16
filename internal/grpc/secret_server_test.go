@@ -268,10 +268,10 @@ func TestProtoMetadataToJSON(t *testing.T) {
 		},
 		{
 			name: "full metadata",
-			metadata: &pb.SecretMetadata{
+			metadata: pb.SecretMetadata_builder{
 				Title:       "My secret",
 				Description: "Description",
-			},
+			}.Build(),
 			want: `{"title":"My secret","description":"Description"}`,
 		},
 		{
@@ -312,13 +312,11 @@ func TestProtoToCreateSecretInput(t *testing.T) {
 	}{
 		{
 			name: "text",
-			secret: &pb.Secret{
-				Payload: &pb.Secret_Text{
-					Text: &pb.TextSecret{
-						Text: "hello",
-					},
-				},
-			},
+			secret: pb.Secret_builder{
+				Text: pb.TextSecret_builder{
+					Text: "hello",
+				}.Build(),
+			}.Build(),
 			wantType: models.SecretText,
 			check: func(
 				t *testing.T,
@@ -343,14 +341,12 @@ func TestProtoToCreateSecretInput(t *testing.T) {
 		},
 		{
 			name: "login password",
-			secret: &pb.Secret{
-				Payload: &pb.Secret_LoginPassword{
-					LoginPassword: &pb.LoginPasswordSecret{
-						Login:    "user",
-						Password: "password",
-					},
-				},
-			},
+			secret: pb.Secret_builder{
+				LoginPassword: pb.LoginPasswordSecret_builder{
+					Login:    "user",
+					Password: "password",
+				}.Build(),
+			}.Build(),
 			wantType: models.SecretLogin,
 			check: func(
 				t *testing.T,
@@ -383,16 +379,14 @@ func TestProtoToCreateSecretInput(t *testing.T) {
 		},
 		{
 			name: "bank card",
-			secret: &pb.Secret{
-				Payload: &pb.Secret_BankCard{
-					BankCard: &pb.BankCardSecret{
-						Number: "1234",
-						Holder: "John Doe",
-						Expire: "12/30",
-						Cvv:    "123",
-					},
-				},
-			},
+			secret: pb.Secret_builder{
+				BankCard: pb.BankCardSecret_builder{
+					Number: "1234",
+					Holder: "John Doe",
+					Expire: "12/30",
+					Cvv:    "123",
+				}.Build(),
+			}.Build(),
 			wantType: models.SecretCard,
 			check: func(
 				t *testing.T,
@@ -441,14 +435,12 @@ func TestProtoToCreateSecretInput(t *testing.T) {
 		},
 		{
 			name: "binary",
-			secret: &pb.Secret{
-				Payload: &pb.Secret_Binary{
-					Binary: &pb.BinarySecret{
-						Filename: "file.pdf",
-						MimeType: "application/pdf",
-					},
-				},
-			},
+			secret: pb.Secret_builder{
+				Binary: pb.BinarySecret_builder{
+					Filename: "file.pdf",
+					MimeType: "application/pdf",
+				}.Build(),
+			}.Build(),
 			wantType: models.SecretBinary,
 			check: func(
 				t *testing.T,
@@ -559,13 +551,11 @@ func TestProtoToUpdateSecretInput(t *testing.T) {
 	}{
 		{
 			name: "text",
-			secret: &pb.Secret{
-				Payload: &pb.Secret_Text{
-					Text: &pb.TextSecret{
-						Text: "updated",
-					},
-				},
-			},
+			secret: pb.Secret_builder{
+				Text: pb.TextSecret_builder{
+					Text: "updated",
+				}.Build(),
+			}.Build(),
 			wantType: models.SecretText,
 			check: func(
 				t *testing.T,
@@ -584,14 +574,12 @@ func TestProtoToUpdateSecretInput(t *testing.T) {
 		},
 		{
 			name: "login password",
-			secret: &pb.Secret{
-				Payload: &pb.Secret_LoginPassword{
-					LoginPassword: &pb.LoginPasswordSecret{
-						Login:    "new-user",
-						Password: "new-password",
-					},
-				},
-			},
+			secret: pb.Secret_builder{
+				LoginPassword: pb.LoginPasswordSecret_builder{
+					Login:    "new-user",
+					Password: "new-password",
+				}.Build(),
+			}.Build(),
 			wantType: models.SecretLogin,
 			check: func(
 				t *testing.T,
@@ -610,28 +598,24 @@ func TestProtoToUpdateSecretInput(t *testing.T) {
 		},
 		{
 			name: "bank card",
-			secret: &pb.Secret{
-				Payload: &pb.Secret_BankCard{
-					BankCard: &pb.BankCardSecret{
-						Number: "1111",
-						Holder: "Jane Doe",
-						Expire: "01/31",
-						Cvv:    "999",
-					},
-				},
-			},
+			secret: pb.Secret_builder{
+				BankCard: pb.BankCardSecret_builder{
+					Number: "1111",
+					Holder: "Jane Doe",
+					Expire: "01/31",
+					Cvv:    "999",
+				}.Build(),
+			}.Build(),
 			wantType: models.SecretCard,
 		},
 		{
 			name: "binary",
-			secret: &pb.Secret{
-				Payload: &pb.Secret_Binary{
-					Binary: &pb.BinarySecret{
-						Filename: "new.pdf",
-						MimeType: "application/pdf",
-					},
-				},
-			},
+			secret: pb.Secret_builder{
+				Binary: pb.BinarySecret_builder{
+					Filename: "new.pdf",
+					MimeType: "application/pdf",
+				}.Build(),
+			}.Build(),
 			wantType: models.SecretBinary,
 			check: func(
 				t *testing.T,
@@ -728,18 +712,12 @@ func TestDomainToProtoSecret(t *testing.T) {
 				Text: "hello",
 			},
 			check: func(t *testing.T, result *pb.Secret) {
-				value, ok := result.Payload.(*pb.Secret_Text)
-				if !ok {
-					t.Fatalf(
-						"expected text payload, got %T",
-						result.Payload,
-					)
-				}
+				value := result.GetText()
 
-				if value.Text.GetText() != "hello" {
+				if value.GetText() != "hello" {
 					t.Errorf(
 						"Text = %q, want %q",
-						value.Text.GetText(),
+						value.GetText(),
 						"hello",
 					)
 				}
@@ -752,19 +730,21 @@ func TestDomainToProtoSecret(t *testing.T) {
 				Password: "password",
 			},
 			check: func(t *testing.T, result *pb.Secret) {
-				value, ok := result.Payload.(*pb.Secret_LoginPassword)
-				if !ok {
-					t.Fatalf(
-						"expected login payload, got %T",
-						result.Payload,
+				value := result.GetLoginPassword()
+
+				if value.GetLogin() != "user" {
+					t.Errorf(
+						"Login = %q, want %q",
+						value.GetLogin(),
+						"user",
 					)
 				}
 
-				if value.LoginPassword.GetLogin() != "user" {
+				if value.GetPassword() != "password" {
 					t.Errorf(
-						"Login = %q, want %q",
-						value.LoginPassword.GetLogin(),
-						"user",
+						"Password = %q, want %q",
+						value.GetPassword(),
+						"password",
 					)
 				}
 			},
@@ -778,18 +758,36 @@ func TestDomainToProtoSecret(t *testing.T) {
 				CVV:    "123",
 			},
 			check: func(t *testing.T, result *pb.Secret) {
-				value, ok := result.Payload.(*pb.Secret_BankCard)
-				if !ok {
-					t.Fatalf(
-						"expected bank card payload, got %T",
-						result.Payload,
+				value := result.GetBankCard()
+
+				if value.GetNumber() != "1234" {
+					t.Errorf(
+						"Number = %q, want %q",
+						value.GetNumber(),
+						"1234",
 					)
 				}
 
-				if value.BankCard.GetCvv() != "123" {
+				if value.GetHolder() != "John Doe" {
+					t.Errorf(
+						"Holder = %q, want %q",
+						value.GetHolder(),
+						"John Doe",
+					)
+				}
+
+				if value.GetExpire() != "12/30" {
+					t.Errorf(
+						"Expire = %q, want %q",
+						value.GetExpire(),
+						"12/30",
+					)
+				}
+
+				if value.GetCvv() != "123" {
 					t.Errorf(
 						"CVV = %q, want %q",
-						value.BankCard.GetCvv(),
+						value.GetCvv(),
 						"123",
 					)
 				}
@@ -802,19 +800,21 @@ func TestDomainToProtoSecret(t *testing.T) {
 				MIMEType: "application/pdf",
 			},
 			check: func(t *testing.T, result *pb.Secret) {
-				value, ok := result.Payload.(*pb.Secret_Binary)
-				if !ok {
-					t.Fatalf(
-						"expected binary payload, got %T",
-						result.Payload,
+				value := result.GetBinary()
+
+				if value.GetFilename() != "file.pdf" {
+					t.Errorf(
+						"Filename = %q, want %q",
+						value.GetFilename(),
+						"file.pdf",
 					)
 				}
 
-				if value.Binary.GetFilename() != "file.pdf" {
+				if value.GetMimeType() != "application/pdf" {
 					t.Errorf(
-						"Filename = %q, want %q",
-						value.Binary.GetFilename(),
-						"file.pdf",
+						"MimeType = %q, want %q",
+						value.GetMimeType(),
+						"application/pdf",
 					)
 				}
 			},
@@ -858,10 +858,10 @@ func TestDomainToProtoSecret(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			if result.Metadata.GetId() != secretID.String() {
+			if result.GetMetadata().GetId() != secretID.String() {
 				t.Errorf(
 					"metadata ID = %q, want %q",
-					result.Metadata.GetId(),
+					result.GetMetadata().GetId(),
 					secretID.String(),
 				)
 			}
@@ -888,34 +888,34 @@ func TestDomainMetadataToProto(t *testing.T) {
 
 	result := domainMetadataToProto(secret)
 
-	if result.Id != id.String() {
+	if result.GetId() != id.String() {
 		t.Errorf(
 			"Id = %q, want %q",
-			result.Id,
+			result.GetId(),
 			id.String(),
 		)
 	}
 
-	if result.Type != pb.SecretType_SECRET_TYPE_BANK_CARD {
+	if result.GetType() != pb.SecretType_SECRET_TYPE_BANK_CARD {
 		t.Errorf(
 			"Type = %v, want %v",
-			result.Type,
+			result.GetType(),
 			pb.SecretType_SECRET_TYPE_BANK_CARD,
 		)
 	}
 
-	if !result.CreatedAt.AsTime().Equal(createdAt) {
+	if !result.GetCreatedAt().AsTime().Equal(createdAt) {
 		t.Errorf(
 			"CreatedAt = %v, want %v",
-			result.CreatedAt.AsTime(),
+			result.GetCreatedAt().AsTime(),
 			createdAt,
 		)
 	}
 
-	if !result.UpdatedAt.AsTime().Equal(updatedAt) {
+	if !result.GetUpdatedAt().AsTime().Equal(updatedAt) {
 		t.Errorf(
 			"UpdatedAt = %v, want %v",
-			result.UpdatedAt.AsTime(),
+			result.GetUpdatedAt().AsTime(),
 			updatedAt,
 		)
 	}
@@ -1042,15 +1042,13 @@ func TestSecretServer_CreateSecret(t *testing.T) {
 
 	server := newTestSecretServer(repo)
 
-	req := &pb.CreateSecretRequest{
-		Secret: &pb.Secret{
-			Payload: &pb.Secret_Text{
-				Text: &pb.TextSecret{
-					Text: "hello",
-				},
-			},
-		},
-	}
+	req := pb.CreateSecretRequest_builder{
+		Secret: pb.Secret_builder{
+			Text: pb.TextSecret_builder{
+				Text: "hello",
+			}.Build(),
+		}.Build(),
+	}.Build()
 
 	result, err := server.CreateSecret(
 		contextWithUserID(ownerID),
@@ -1065,10 +1063,10 @@ func TestSecretServer_CreateSecret(t *testing.T) {
 		t.Fatal("expected response, got nil")
 	}
 
-	if result.Id != secretID.String() {
+	if result.GetId() != secretID.String() {
 		t.Errorf(
 			"ID = %q, want %q",
-			result.Id,
+			result.GetId(),
 			secretID.String(),
 		)
 	}
@@ -1134,15 +1132,13 @@ func TestSecretServer_CreateSecret_ServiceError(t *testing.T) {
 
 	server := newTestSecretServer(repo)
 
-	req := &pb.CreateSecretRequest{
-		Secret: &pb.Secret{
-			Payload: &pb.Secret_Text{
-				Text: &pb.TextSecret{
-					Text: "hello",
-				},
-			},
-		},
-	}
+	req := pb.CreateSecretRequest_builder{
+		Secret: pb.Secret_builder{
+			Text: pb.TextSecret_builder{
+				Text: "hello",
+			}.Build(),
+		}.Build(),
+	}.Build()
 
 	_, err := server.CreateSecret(
 		contextWithUserID(uuid.New()),
@@ -1171,54 +1167,34 @@ func TestSecretServer_GetSecret(t *testing.T) {
 				ID:            gotSecretID,
 				OwnerID:       gotOwnerID,
 				Type:          models.SecretText,
-				EncryptedData: []byte("encrypted"),
+				EncryptedData: []byte(`{"text":"hello"}`),
 			}, nil
 		},
 	}
 
 	server := newTestSecretServer(repo)
 
-	// mockEncryptor возвращает данные как есть.
-	// Поэтому для JSONSerializer нужно передать JSON.
-	repo.getByIDFunc = func(
-		ctx context.Context,
-		gotOwnerID, gotSecretID uuid.UUID,
-	) (*models.Secret, error) {
-		return &models.Secret{
-			ID:            gotSecretID,
-			OwnerID:       gotOwnerID,
-			Type:          models.SecretText,
-			EncryptedData: []byte(`{"text":"hello"}`),
-		}, nil
-	}
-
 	result, err := server.GetSecret(
 		contextWithUserID(ownerID),
-		&pb.GetSecretRequest{
+		pb.GetSecretRequest_builder{
 			Id: secretID.String(),
-		},
+		}.Build(),
 	)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result == nil || result.Secret == nil {
+	if result == nil || !result.HasSecret() {
 		t.Fatal("expected secret in response")
 	}
 
-	payload, ok := result.Secret.Payload.(*pb.Secret_Text)
-	if !ok {
-		t.Fatalf(
-			"expected text payload, got %T",
-			result.Secret.Payload,
-		)
-	}
+	text := result.GetSecret().GetText()
 
-	if payload.Text.GetText() != "hello" {
+	if text.GetText() != "hello" {
 		t.Errorf(
 			"Text = %q, want %q",
-			payload.Text.GetText(),
+			text.GetText(),
 			"hello",
 		)
 	}
@@ -1229,9 +1205,9 @@ func TestSecretServer_GetSecret_InvalidID(t *testing.T) {
 
 	result, err := server.GetSecret(
 		contextWithUserID(uuid.New()),
-		&pb.GetSecretRequest{
+		pb.GetSecretRequest_builder{
 			Id: "invalid",
-		},
+		}.Build(),
 	)
 
 	if result != nil {
@@ -1292,26 +1268,26 @@ func TestSecretServer_ListSecrets(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(result.Secrets) != 2 {
+	if len(result.GetSecrets()) != 2 {
 		t.Fatalf(
 			"got %d secrets, want 2",
-			len(result.Secrets),
+			len(result.GetSecrets()),
 		)
 	}
 
-	if result.Secrets[0].Id != secret1.ID.String() {
+	if result.GetSecrets()[0].GetId() != secret1.ID.String() {
 		t.Errorf(
 			"first ID = %q, want %q",
-			result.Secrets[0].Id,
+			result.GetSecrets()[0].GetId(),
 			secret1.ID.String(),
 		)
 	}
 
-	if result.Secrets[1].Type !=
+	if result.GetSecrets()[1].GetType() !=
 		pb.SecretType_SECRET_TYPE_BINARY_FILE {
 		t.Errorf(
 			"second type = %v, want binary",
-			result.Secrets[1].Type,
+			result.GetSecrets()[1].GetType(),
 		)
 	}
 }
@@ -1371,9 +1347,9 @@ func TestSecretServer_DeleteSecret(t *testing.T) {
 
 	result, err := server.DeleteSecret(
 		contextWithUserID(ownerID),
-		&pb.DeleteSecretRequest{
+		pb.DeleteSecretRequest_builder{
 			Id: secretID.String(),
-		},
+		}.Build(),
 	)
 
 	if err != nil {
@@ -1406,9 +1382,9 @@ func TestSecretServer_DeleteSecret_InvalidID(t *testing.T) {
 
 	result, err := server.DeleteSecret(
 		contextWithUserID(uuid.New()),
-		&pb.DeleteSecretRequest{
+		pb.DeleteSecretRequest_builder{
 			Id: "invalid",
-		},
+		}.Build(),
 	)
 
 	if result != nil {
@@ -1441,9 +1417,9 @@ func TestSecretServer_DeleteSecret_Error(t *testing.T) {
 
 	_, err := server.DeleteSecret(
 		contextWithUserID(uuid.New()),
-		&pb.DeleteSecretRequest{
+		pb.DeleteSecretRequest_builder{
 			Id: uuid.New().String(),
-		},
+		}.Build(),
 	)
 
 	if status.Code(err) != codes.NotFound {
@@ -1470,18 +1446,16 @@ func TestSecretServer_UpdateSecret(t *testing.T) {
 
 	server := newTestSecretServer(repo)
 
-	req := &pb.UpdateSecretRequest{
-		Secret: &pb.Secret{
-			Metadata: &pb.SecretMetadata{
+	req := pb.UpdateSecretRequest_builder{
+		Secret: pb.Secret_builder{
+			Metadata: pb.SecretMetadata_builder{
 				Id: secretID.String(),
-			},
-			Payload: &pb.Secret_Text{
-				Text: &pb.TextSecret{
-					Text: "updated text",
-				},
-			},
-		},
-	}
+			}.Build(),
+			Text: pb.TextSecret_builder{
+				Text: "updated text",
+			}.Build(),
+		}.Build(),
+	}.Build()
 
 	result, err := server.UpdateSecret(
 		contextWithUserID(ownerID),
@@ -1519,15 +1493,13 @@ func TestSecretServer_UpdateSecret_MissingMetadata(t *testing.T) {
 
 	_, err := server.UpdateSecret(
 		contextWithUserID(uuid.New()),
-		&pb.UpdateSecretRequest{
-			Secret: &pb.Secret{
-				Payload: &pb.Secret_Text{
-					Text: &pb.TextSecret{
-						Text: "text",
-					},
-				},
-			},
-		},
+		pb.UpdateSecretRequest_builder{
+			Secret: pb.Secret_builder{
+				Text: pb.TextSecret_builder{
+					Text: "text",
+				}.Build(),
+			}.Build(),
+		}.Build(),
 	)
 
 	if status.Code(err) != codes.InvalidArgument {
@@ -1553,18 +1525,16 @@ func TestSecretServer_UpdateSecret_InvalidID(t *testing.T) {
 
 	_, err := server.UpdateSecret(
 		contextWithUserID(uuid.New()),
-		&pb.UpdateSecretRequest{
-			Secret: &pb.Secret{
-				Metadata: &pb.SecretMetadata{
+		pb.UpdateSecretRequest_builder{
+			Secret: pb.Secret_builder{
+				Metadata: pb.SecretMetadata_builder{
 					Id: "invalid",
-				},
-				Payload: &pb.Secret_Text{
-					Text: &pb.TextSecret{
-						Text: "text",
-					},
-				},
-			},
-		},
+				}.Build(),
+				Text: pb.TextSecret_builder{
+					Text: "text",
+				}.Build(),
+			}.Build(),
+		}.Build(),
 	)
 
 	if status.Code(err) != codes.InvalidArgument {
@@ -1590,18 +1560,16 @@ func TestSecretServer_UpdateSecret_ServiceError(t *testing.T) {
 
 	_, err := server.UpdateSecret(
 		contextWithUserID(uuid.New()),
-		&pb.UpdateSecretRequest{
-			Secret: &pb.Secret{
-				Metadata: &pb.SecretMetadata{
+		pb.UpdateSecretRequest_builder{
+			Secret: pb.Secret_builder{
+				Metadata: pb.SecretMetadata_builder{
 					Id: uuid.New().String(),
-				},
-				Payload: &pb.Secret_Text{
-					Text: &pb.TextSecret{
-						Text: "text",
-					},
-				},
-			},
-		},
+				}.Build(),
+				Text: pb.TextSecret_builder{
+					Text: "text",
+				}.Build(),
+			}.Build(),
+		}.Build(),
 	)
 
 	if status.Code(err) != codes.NotFound {

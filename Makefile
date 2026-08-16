@@ -144,9 +144,21 @@ proto:
 		-I api/proto \
 		--go_out=api/proto \
 		--go_opt=paths=source_relative \
+		--go_opt=default_api_level=API_OPAQUE \
 		--go-grpc_out=api/proto \
 		--go-grpc_opt=paths=source_relative \
 		api/proto/*.proto
+
+opaque-hybrid:
+	open2opaque setapi -api HYBRID $$(find $(PROTO_DIR) -name "*.proto")
+	$(MAKE) proto
+
+opaque-rewrite:
+	open2opaque rewrite -levels=red ./...
+
+opaque:
+	open2opaque setapi -api OPAQUE $$(find $(PROTO_DIR) -name "*.proto")
+	$(MAKE) proto
 
 # ------------------------------------------------------------
 # Database migrations

@@ -58,10 +58,10 @@ func main() {
 
 	registerResponse, err := authClient.Register(
 		ctx,
-		&pb.RegisterRequest{
+		pb.RegisterRequest_builder{
 			Login:    login,
 			Password: password,
-		},
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf("register failed: %v", err)
@@ -82,10 +82,10 @@ func main() {
 
 	loginResponse, err := authClient.Login(
 		ctx,
-		&pb.LoginRequest{
+		pb.LoginRequest_builder{
 			Login:    login,
 			Password: password,
-		},
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf("login failed: %v", err)
@@ -113,15 +113,13 @@ func main() {
 
 	createResponse, err := secretClient.CreateSecret(
 		authCtx,
-		&pb.CreateSecretRequest{
-			Secret: &pb.Secret{
-				Payload: &pb.Secret_Text{
-					Text: &pb.TextSecret{
-						Text: "my first secret",
-					},
-				},
-			},
-		},
+		pb.CreateSecretRequest_builder{
+			Secret: pb.Secret_builder{
+				Text: pb.TextSecret_builder{
+					Text: "my first secret",
+				}.Build(),
+			}.Build(),
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf("create secret failed: %v", err)
@@ -143,9 +141,9 @@ func main() {
 
 	getResponse, err := secretClient.GetSecret(
 		authCtx,
-		&pb.GetSecretRequest{
+		pb.GetSecretRequest_builder{
 			Id: secretID,
-		},
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf("get secret failed: %v", err)
@@ -164,18 +162,16 @@ func main() {
 
 	_, err = secretClient.UpdateSecret(
 		authCtx,
-		&pb.UpdateSecretRequest{
-			Secret: &pb.Secret{
-				Metadata: &pb.SecretMetadata{
+		pb.UpdateSecretRequest_builder{
+			Secret: pb.Secret_builder{
+				Metadata: pb.SecretMetadata_builder{
 					Id: secretID,
-				},
-				Payload: &pb.Secret_Text{
-					Text: &pb.TextSecret{
-						Text: "updated secret value",
-					},
-				},
-			},
-		},
+				}.Build(),
+				Text: pb.TextSecret_builder{
+					Text: "updated secret value",
+				}.Build(),
+			}.Build(),
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf("update secret failed: %v", err)
@@ -194,9 +190,9 @@ func main() {
 
 	getResponse, err = secretClient.GetSecret(
 		authCtx,
-		&pb.GetSecretRequest{
+		pb.GetSecretRequest_builder{
 			Id: secretID,
-		},
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf("get updated secret failed: %v", err)
@@ -243,9 +239,9 @@ func main() {
 
 	_, err = secretClient.DeleteSecret(
 		authCtx,
-		&pb.DeleteSecretRequest{
+		pb.DeleteSecretRequest_builder{
 			Id: secretID,
-		},
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf("delete secret failed: %v", err)
@@ -264,9 +260,9 @@ func main() {
 
 	_, err = secretClient.GetSecret(
 		authCtx,
-		&pb.GetSecretRequest{
+		pb.GetSecretRequest_builder{
 			Id: secretID,
-		},
+		}.Build(),
 	)
 
 	if err == nil {
@@ -298,16 +294,14 @@ func main() {
 
 	binaryCreateResponse, err := secretClient.CreateSecret(
 		authCtx,
-		&pb.CreateSecretRequest{
-			Secret: &pb.Secret{
-				Payload: &pb.Secret_Binary{
-					Binary: &pb.BinarySecret{
-						Filename: filename,
-						MimeType: mimeType,
-					},
-				},
-			},
-		},
+		pb.CreateSecretRequest_builder{
+			Secret: pb.Secret_builder{
+				Binary: pb.BinarySecret_builder{
+					Filename: filename,
+					MimeType: mimeType,
+				}.Build(),
+			}.Build(),
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf(
@@ -408,9 +402,9 @@ func main() {
 
 	binaryGetResponse, err := secretClient.GetSecret(
 		authCtx,
-		&pb.GetSecretRequest{
+		pb.GetSecretRequest_builder{
 			Id: binarySecretID,
-		},
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf(
@@ -432,9 +426,9 @@ func main() {
 
 	_, err = secretClient.DeleteSecret(
 		authCtx,
-		&pb.DeleteSecretRequest{
+		pb.DeleteSecretRequest_builder{
 			Id: binarySecretID,
-		},
+		}.Build(),
 	)
 	if err != nil {
 		log.Fatalf(
@@ -456,9 +450,9 @@ func main() {
 
 	_, err = secretClient.GetSecret(
 		authCtx,
-		&pb.GetSecretRequest{
+		pb.GetSecretRequest_builder{
 			Id: binarySecretID,
-		},
+		}.Build(),
 	)
 
 	if err == nil {
@@ -528,10 +522,10 @@ func uploadFile(
 		chunk := data[offset:end]
 
 		err := stream.Send(
-			&pb.UploadBinaryChunk{
+			pb.UploadBinaryChunk_builder{
 				SecretId: secretID,
 				Chunk:    chunk,
-			},
+			}.Build(),
 		)
 		if err != nil {
 			return fmt.Errorf(
@@ -570,9 +564,9 @@ func downloadFile(
 ) ([]byte, error) {
 	stream, err := client.DownloadBinary(
 		ctx,
-		&pb.DownloadBinaryRequest{
+		pb.DownloadBinaryRequest_builder{
 			SecretId: secretID,
-		},
+		}.Build(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -652,49 +646,49 @@ func printSecret(secret *pb.Secret) {
 		)
 	}
 
-	switch payload := secret.GetPayload().(type) {
-	case *pb.Secret_Text:
+	switch secret.WhichPayload() {
+	case pb.Secret_Text_case:
 		fmt.Println(
 			"  text:",
-			payload.Text.GetText(),
+			secret.GetText().GetText(),
 		)
 
-	case *pb.Secret_LoginPassword:
+	case pb.Secret_LoginPassword_case:
 		fmt.Println(
 			"  login:",
-			payload.LoginPassword.GetLogin(),
+			secret.GetLoginPassword().GetLogin(),
 		)
 		fmt.Println(
 			"  password:",
-			payload.LoginPassword.GetPassword(),
+			secret.GetLoginPassword().GetPassword(),
 		)
 
-	case *pb.Secret_BankCard:
+	case pb.Secret_BankCard_case:
 		fmt.Println(
 			"  card number:",
-			payload.BankCard.GetNumber(),
+			secret.GetBankCard().GetNumber(),
 		)
 		fmt.Println(
 			"  card holder:",
-			payload.BankCard.GetHolder(),
+			secret.GetBankCard().GetHolder(),
 		)
 		fmt.Println(
 			"  card expire:",
-			payload.BankCard.GetExpire(),
+			secret.GetBankCard().GetExpire(),
 		)
 		fmt.Println(
 			"  card CVV:",
-			payload.BankCard.GetCvv(),
+			secret.GetBankCard().GetCvv(),
 		)
 
-	case *pb.Secret_Binary:
+	case pb.Secret_Binary_case:
 		fmt.Println(
 			"  filename:",
-			payload.Binary.GetFilename(),
+			secret.GetBinary().GetFilename(),
 		)
 		fmt.Println(
 			"  mime type:",
-			payload.Binary.GetMimeType(),
+			secret.GetBinary().GetMimeType(),
 		)
 
 	default:
