@@ -128,6 +128,8 @@ GRANT ALL PRIVILEGES ON DATABASE secrets_keeper TO secrets_keeper;
 | `ENCRYPTION_KEY` | ключ AES-256 | e |
 | `RUN_ADDRESS` | адрес gRPC-сервера | a |
 | `SHUTDOWN_TIMEOUT` | timeout для graceful shutdown | shutdown-timeout |
+| `TLS_CERT_FILE` | сертификат для TLS | tls-cert |
+| `TLS_KEY_FILE` | TLS ключ | tls-key |
 
 Пример .env:
 
@@ -137,6 +139,8 @@ DATABASE_URL=postgresql://user:password@localhost:5432/secrets_keeper?sslmode=di
 JWT_SECRET=change-me
 ENCRYPTION_KEY=...
 SHUTDOWN_TIMEOUT=10s
+TLS_CERT_FILE=certs/server.crt
+TLS_KEY_FILE=certs/server.key
 ```
 
 `ENCRYPTION_KEY` должен содержать ровно 32 байта для AES-256.
@@ -191,6 +195,27 @@ make proto
 
 ---
 
+### TLS
+
+gRPC соединение между CLI и сервером защищено TLS.
+
+Для локальной разработки используется самоподписанный сертификат.
+
+Сгенерировать сертификат:
+
+```bash
+openssl req \
+  -x509 \
+  -newkey rsa:2048 \
+  -keyout certs/server.key \
+  -out certs/server.crt \
+  -days 365 \
+  -nodes \
+  -subj "/CN=localhost" \
+  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+```
+---
+
 ## Запуск сервера
 
 Перед запуском необходимо:
@@ -199,7 +224,8 @@ make proto
 1. запустить PostgreSQL;
 2. создать базу данных;
 3. применить миграции;
-4. настроить `.env`.
+4. настроить `.env`;
+5. сгенерировать сертификат TLS.
 
 После этого:
 

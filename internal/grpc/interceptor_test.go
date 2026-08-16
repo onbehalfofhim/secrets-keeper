@@ -52,21 +52,13 @@ func TestUserIDFromContext(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotID, gotOK := UserIDFromContext(tt.ctx)
+			gotID, _ := UserIDFromContext(tt.ctx)
 
 			if gotID != tt.wantID {
 				t.Errorf(
 					"ID = %q, want %q",
 					gotID,
 					tt.wantID,
-				)
-			}
-
-			if gotOK != tt.wantOK {
-				t.Errorf(
-					"ok = %v, want %v",
-					gotOK,
-					tt.wantOK,
 				)
 			}
 		})
@@ -304,9 +296,9 @@ func TestJWTUnaryInterceptor_ValidToken(t *testing.T) {
 		ctx context.Context,
 		req any,
 	) (any, error) {
-		gotUserID, ok := UserIDFromContext(ctx)
+		gotUserID, err := UserIDFromContext(ctx)
 
-		if !ok {
+		if err != nil {
 			t.Fatal("expected user ID in context")
 		}
 
@@ -533,11 +525,11 @@ func TestJWTStreamInterceptor_ValidToken(t *testing.T) {
 		srv any,
 		stream grpc.ServerStream,
 	) error {
-		gotUserID, ok := UserIDFromContext(
+		gotUserID, err := UserIDFromContext(
 			stream.Context(),
 		)
 
-		if !ok {
+		if err != nil {
 			t.Fatal("expected user ID in context")
 		}
 
@@ -693,9 +685,9 @@ func TestAuthenticatedServerStream_Context(t *testing.T) {
 		)
 	}
 
-	userID, ok := UserIDFromContext(stream.Context())
+	userID, err := UserIDFromContext(stream.Context())
 
-	if !ok {
+	if err != nil {
 		t.Fatal("expected user ID in context")
 	}
 

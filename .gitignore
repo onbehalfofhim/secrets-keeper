@@ -21,5 +21,9 @@ vendor/
 #secrets
 .env
 
+#certs
+certs/server.key
+certs/server.crt
+
 #Binary
 bin/

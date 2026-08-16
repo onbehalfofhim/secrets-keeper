@@ -3,9 +3,9 @@ package grpc
 import (
 	"context"
 	"errors"
+	"log/slog"
 
 	pb "github.com/onbehalfofhim/secrets-keeper/api/proto"
-	"github.com/onbehalfofhim/secrets-keeper/internal/logger"
 	"github.com/onbehalfofhim/secrets-keeper/internal/repository"
 	"github.com/onbehalfofhim/secrets-keeper/internal/service"
 
@@ -19,11 +19,11 @@ type AuthServer struct {
 	pb.UnimplementedAuthServiceServer
 
 	service *service.AuthService
-	logger  *logger.Logger
+	logger  *slog.Logger
 }
 
 // NewAuthServer создаёт gRPC-сервер для работы с пользователями.
-func NewAuthServer(service *service.AuthService, logger *logger.Logger) *AuthServer {
+func NewAuthServer(service *service.AuthService, logger *slog.Logger) *AuthServer {
 	return &AuthServer{
 		service: service,
 		logger:  logger,
@@ -40,8 +40,6 @@ func (s *AuthServer) Register(ctx context.Context, req *pb.RegisterRequest) (*pb
 	user, err := s.service.Register(ctx, login, req.GetPassword())
 
 	if err != nil {
-		s.logger.Error("user registration failed", "login", login, "error", err)
-
 		return nil, mapAuthError(err)
 	}
 
@@ -62,8 +60,6 @@ func (s *AuthServer) Login(ctx context.Context, req *pb.LoginRequest) (*pb.Login
 	result, err := s.service.Login(ctx, login, req.GetPassword())
 
 	if err != nil {
-		s.logger.Error("user login failed", "login", login, "error", err)
-
 		return nil, mapAuthError(err)
 	}
 

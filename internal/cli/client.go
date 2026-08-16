@@ -6,9 +6,9 @@ import (
 	"time"
 
 	pb "github.com/onbehalfofhim/secrets-keeper/api/proto"
+	"github.com/onbehalfofhim/secrets-keeper/internal/grpcclient"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -34,12 +34,12 @@ func NewClient(cfg Config) (*Client, error) {
 		return nil, fmt.Errorf("server address is empty")
 	}
 
-	conn, err := grpc.NewClient(
+	conn, err := grpcclient.New(
 		cfg.ServerAddr,
-		grpc.WithTransportCredentials(
-			insecure.NewCredentials(),
-		),
+		cfg.CertFile,
+		"localhost",
 	)
+
 	if err != nil {
 		return nil, fmt.Errorf(
 			"create gRPC client: %w",

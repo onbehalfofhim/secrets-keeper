@@ -16,6 +16,9 @@ type Config struct {
 	JWTSecret       string        `env:"JWT_SECRET"`
 	EncryptionKey   string        `env:"ENCRYPTION_KEY"`
 	ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"10s"`
+
+	TLSCertFile string `env:"TLS_CERT_FILE"`
+	TLSKeyFile  string `env:"TLS_KEY_FILE"`
 }
 
 // ParseFlags загружает конфигурацию из .env,
@@ -37,6 +40,9 @@ func ParseFlags() (Config, error) {
 	flag.StringVar(&cfg.JWTSecret, "k", cfg.JWTSecret, "JWT secret")
 	flag.StringVar(&cfg.EncryptionKey, "e", cfg.EncryptionKey, "encryption key")
 	flag.DurationVar(&cfg.ShutdownTimeout, "shutdown-timeout", cfg.ShutdownTimeout, "graceful shutdown timeout")
+
+	flag.StringVar(&cfg.TLSCertFile, "tls-cert", cfg.TLSCertFile, "TLS cert")
+	flag.StringVar(&cfg.TLSKeyFile, "tls-key", cfg.TLSKeyFile, "TLS key")
 	flag.Parse()
 
 	// 4. Валидация

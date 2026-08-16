@@ -7,8 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-
-	"github.com/onbehalfofhim/secrets-keeper/internal/logger"
+	"log/slog"
 )
 
 var (
@@ -26,13 +25,13 @@ type Encryptor interface {
 // с использованием AES-GCM.
 type AESGCM struct {
 	aead   cipher.AEAD
-	logger *logger.Logger
+	logger *slog.Logger
 }
 
 // NewAESGCM создаёт новый AES-GCM шифратор.
 //
 // Для AES-256 ключ должен иметь длину ровно 32 байта.
-func NewAESGCM(key []byte, logger *logger.Logger) (*AESGCM, error) {
+func NewAESGCM(key []byte, logger *slog.Logger) (*AESGCM, error) {
 	if len(key) != 32 {
 		if logger != nil {
 			logger.Error("invalid encryption key", "key_length", len(key))

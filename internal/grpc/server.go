@@ -3,13 +3,14 @@ package grpc
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 
 	pb "github.com/onbehalfofhim/secrets-keeper/api/proto"
 	"github.com/onbehalfofhim/secrets-keeper/internal/auth"
-	"github.com/onbehalfofhim/secrets-keeper/internal/logger"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 // Server представляет gRPC-сервер приложения.
@@ -19,7 +20,7 @@ import (
 type Server struct {
 	grpcServer *grpc.Server
 	port       string
-	logger     *logger.Logger
+	logger     *slog.Logger
 }
 
 // NewServer создаёт и настраивает gRPC-сервер.
@@ -27,8 +28,17 @@ type Server struct {
 // Регистрирует сервисы аутентификации, работы с секретами и
 // бинарными файлами, а также подключает JWT-interceptor'ы
 // для unary и streaming RPC.
-func NewServer(port string, authServer *AuthServer, secretServer *SecretServer, binaryServer *BinaryServer, jwtManager *auth.JWT, logger *logger.Logger) *Server {
+func NewServer(
+	port string,
+	authServer *AuthServer,
+	secretServer *SecretServer,
+	binaryServer *BinaryServer,
+	jwtManager *auth.JWT,
+	logger *slog.Logger,
+	transportCredentials credentials.TransportCredentials,
+) *Server {
 	grpcServer := grpc.NewServer(
+		grpc.Creds(transportCredentials),
 		grpc.UnaryInterceptor(
 			JWTUnaryInterceptor(jwtManager),
 		),

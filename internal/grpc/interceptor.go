@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/onbehalfofhim/secrets-keeper/internal/auth"
@@ -19,14 +20,27 @@ type contextKey string
 
 const userIDKey contextKey = "userID"
 
+var (
+	ErrUserIDNotFound = errors.New("user ID not found in context")
+	ErrInvalidUserID  = errors.New("invalid user ID in context")
+)
+
 // UserIDFromContext возвращает идентификатор пользователя
 // из контекста текущего gRPC-запроса.
-//
-// Второе возвращаемое значение показывает, был ли найден
-// идентификатор пользователя в контексте.
-func UserIDFromContext(ctx context.Context) (string, bool) {
-	userID, ok := ctx.Value(userIDKey).(string)
-	return userID, ok
+func UserIDFromContext(ctx context.Context) (string, error) {
+	value := ctx.Value(userIDKey)
+	if value == nil {
+		return "", ErrUserIDNotFound
+	}
+	userID, ok := value.(string)
+	if !ok {
+		return "", fmt.Errorf(
+			"%w: got %T",
+			ErrInvalidUserID,
+			value,
+		)
+	}
+	return userID, nil
 }
 
 // JWTUnaryInterceptor проверяет JWT для unary gRPC-запросов.

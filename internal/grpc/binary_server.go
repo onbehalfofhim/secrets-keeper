@@ -3,9 +3,9 @@ package grpc
 import (
 	"errors"
 	"io"
+	"log/slog"
 
 	pb "github.com/onbehalfofhim/secrets-keeper/api/proto"
-	"github.com/onbehalfofhim/secrets-keeper/internal/logger"
 	"github.com/onbehalfofhim/secrets-keeper/internal/repository"
 	"github.com/onbehalfofhim/secrets-keeper/internal/service"
 
@@ -20,12 +20,12 @@ type BinaryServer struct {
 	pb.UnimplementedBinaryServiceServer
 
 	service *service.BinaryService
-	logger  *logger.Logger
+	logger  *slog.Logger
 }
 
 // NewBinaryServer создаёт gRPC-сервер для работы
 // с бинарными данными секретов.
-func NewBinaryServer(service *service.BinaryService, logger *logger.Logger) *BinaryServer {
+func NewBinaryServer(service *service.BinaryService, logger *slog.Logger) *BinaryServer {
 	return &BinaryServer{
 		service: service,
 		logger:  logger,

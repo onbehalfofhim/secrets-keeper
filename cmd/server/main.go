@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-
+	"crypto/tls"
 	"os"
 	"os/signal"
 	"syscall"
@@ -18,6 +18,8 @@ import (
 	"github.com/onbehalfofhim/secrets-keeper/internal/service"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"google.golang.org/grpc/credentials"
 )
 
 const (
@@ -35,7 +37,6 @@ func main() {
 	cfg, err := config.ParseFlags()
 	if err != nil {
 		log.Error("failed to load configuration", "error", err)
-
 		os.Exit(1)
 	}
 
@@ -43,21 +44,21 @@ func main() {
 	// PostgreSQL
 	// ============================================================
 
-	ctx, cancel := context.WithTimeout(context.Background(), databasePingTimeout)
+	ctx, cancel := context.WithTimeout(
+		context.Background(),
+		databasePingTimeout,
+	)
 	defer cancel()
 
 	db, err := pgxpool.New(ctx, cfg.DatabaseURI)
 	if err != nil {
 		log.Error("failed to create database pool", "error", err)
-
 		os.Exit(1)
 	}
+	defer db.Close()
 
 	if err := db.Ping(ctx); err != nil {
 		log.Error("failed to connect to database", "error", err)
-
-		db.Close()
-
 		os.Exit(1)
 	}
 
@@ -81,7 +82,7 @@ func main() {
 
 	authServer := grpcserver.NewAuthServer(
 		authService,
-		log,
+		log.With("component", "auth-server"),
 	)
 
 	// ============================================================
@@ -90,13 +91,10 @@ func main() {
 
 	encryptor, err := crypto.NewAESGCM(
 		[]byte(cfg.EncryptionKey),
-		log,
+		log.With("component", "crypto"),
 	)
 	if err != nil {
 		log.Error("failed to initialize encryption", "error", err)
-
-		db.Close()
-
 		os.Exit(1)
 	}
 
@@ -116,7 +114,7 @@ func main() {
 
 	secretServer := grpcserver.NewSecretServer(
 		secretService,
-		log,
+		log.With("component", "secret-server"),
 	)
 
 	// ============================================================
@@ -130,8 +128,33 @@ func main() {
 
 	binaryServer := grpcserver.NewBinaryServer(
 		binaryService,
-		log,
+		log.With("component", "binary-server"),
 	)
+
+	// ============================================================
+	// TLS
+	// ============================================================
+
+	cert, err := tls.LoadX509KeyPair(
+		cfg.TLSCertFile,
+		cfg.TLSKeyFile,
+	)
+	if err != nil {
+		log.Error(
+			"failed to load TLS certificate",
+			"error",
+			err,
+		)
+
+		os.Exit(1)
+	}
+
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS13,
+	}
+
+	transportCredentials := credentials.NewTLS(tlsConfig)
 
 	// ============================================================
 	// gRPC Server
@@ -143,7 +166,8 @@ func main() {
 		secretServer,
 		binaryServer,
 		jwtManager,
-		log,
+		log.With("component", "grpc-server"),
+		transportCredentials,
 	)
 
 	// ============================================================
@@ -152,7 +176,11 @@ func main() {
 
 	stop := make(chan os.Signal, 1)
 
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(
+		stop,
+		os.Interrupt,
+		syscall.SIGTERM,
+	)
 
 	defer signal.Stop(stop)
 
@@ -173,34 +201,35 @@ func main() {
 	select {
 	case err := <-serverErr:
 		if err != nil {
-			log.Error("gRPC server stopped with error", "error", err)
-
-			db.Close()
+			log.Error(
+				"gRPC server stopped with error",
+				"error",
+				err,
+			)
 
 			os.Exit(1)
 		}
 
 	case signal := <-stop:
-		log.Info("shutdown signal received", "signal", signal.String())
+		log.Info(
+			"shutdown signal received",
+			"signal",
+			signal.String(),
+		)
 	}
 
 	// ============================================================
 	// Graceful shutdown
 	// ============================================================
 
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+	shutdownCtx, shutdownCancel := context.WithTimeout(
+		context.Background(),
+		cfg.ShutdownTimeout,
+	)
 	defer shutdownCancel()
 
 	server.Stop(shutdownCtx)
 
-	// ============================================================
-	// PostgreSQL shutdown
-	// ============================================================
-
-	log.Info("closing PostgreSQL connection")
-
-	db.Close()
-
-	log.Info("PostgreSQL connection closed")
+	// PostgreSQL закрывается через defer db.Close().
 	log.Info("application stopped")
 }

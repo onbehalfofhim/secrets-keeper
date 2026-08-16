@@ -12,6 +12,7 @@ import (
 type Config struct {
 	ServerAddr string `env:"SECRETS_KEEPER_ADDR" envDefault:"localhost:50051"`
 	TokenFile  string `env:"SECRETS_KEEPER_TOKEN"`
+	CertFile   string `env:"GRPC_CERT_FILE" envDefault:"certs/server.crt"`
 }
 
 // LoadConfig загружает конфигурацию из .env и environment.

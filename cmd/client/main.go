@@ -9,15 +9,15 @@ import (
 	"time"
 
 	pb "github.com/onbehalfofhim/secrets-keeper/api/proto"
+	"github.com/onbehalfofhim/secrets-keeper/internal/grpcclient"
 
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
 const grpcAddr = "localhost:50051"
+const certFile = "certs/server.crt"
 
 func main() {
 	ctx, cancel := context.WithTimeout(
@@ -26,12 +26,10 @@ func main() {
 	)
 	defer cancel()
 
-	conn, err := grpc.DialContext(
-		ctx,
+	conn, err := grpcclient.New(
 		grpcAddr,
-		grpc.WithTransportCredentials(
-			insecure.NewCredentials(),
-		),
+		certFile,
+		"localhost",
 	)
 	if err != nil {
 		log.Fatalf("failed to connect to gRPC server: %v", err)

@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	pb "github.com/onbehalfofhim/secrets-keeper/api/proto"
-	"github.com/onbehalfofhim/secrets-keeper/internal/logger"
 	"github.com/onbehalfofhim/secrets-keeper/internal/models"
 	"github.com/onbehalfofhim/secrets-keeper/internal/repository"
 	"github.com/onbehalfofhim/secrets-keeper/internal/service"
@@ -24,11 +24,11 @@ type SecretServer struct {
 	pb.UnimplementedSecretServiceServer
 
 	service *service.SecretService
-	logger  *logger.Logger
+	logger  *slog.Logger
 }
 
 // NewSecretServer создаёт gRPC-сервер для работы с секретами.
-func NewSecretServer(service *service.SecretService, logger *logger.Logger) *SecretServer {
+func NewSecretServer(service *service.SecretService, logger *slog.Logger) *SecretServer {
 	return &SecretServer{
 		service: service,
 		logger:  logger,
@@ -38,8 +38,8 @@ func NewSecretServer(service *service.SecretService, logger *logger.Logger) *Sec
 // getUserID извлекает ID аутентифицированного пользователя
 // из context текущего gRPC-запроса.
 func getUserID(ctx context.Context) (uuid.UUID, error) {
-	userID, ok := UserIDFromContext(ctx)
-	if !ok {
+	userID, err := UserIDFromContext(ctx)
+	if err != nil {
 		return uuid.Nil, status.Error(
 			codes.Unauthenticated,
 			"authentication required",
