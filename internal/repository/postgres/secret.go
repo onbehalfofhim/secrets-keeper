@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -77,7 +78,7 @@ func (r *SecretRepository) Create(ctx context.Context, secret *models.Secret) (*
 		&result.UpdatedAt,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create secret: %w", err)
 	}
 
 	return &result, nil
@@ -127,7 +128,7 @@ func (r *SecretRepository) GetByID(ctx context.Context, ownerID, secretID uuid.U
 			return nil, repository.ErrSecretNotFound
 		}
 
-		return nil, err
+		return nil, fmt.Errorf("get secret by id: %w", err)
 	}
 
 	return &secret, nil
@@ -154,7 +155,7 @@ func (r *SecretRepository) List(ctx context.Context, ownerID uuid.UUID) ([]*mode
 
 	rows, err := r.db.Query(ctx, query, ownerID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list secrets: %w", err)
 	}
 	defer rows.Close()
 
@@ -173,14 +174,14 @@ func (r *SecretRepository) List(ctx context.Context, ownerID uuid.UUID) ([]*mode
 			&secret.UpdatedAt,
 		)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("scan secret in list: %w", err)
 		}
 
 		secrets = append(secrets, &secret)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("iterate secrets: %w", err)
 	}
 
 	return secrets, nil
@@ -242,7 +243,7 @@ func (r *SecretRepository) Update(ctx context.Context, secret *models.Secret) (*
 			return nil, repository.ErrSecretNotFound
 		}
 
-		return nil, err
+		return nil, fmt.Errorf("update secret: %w", err)
 	}
 
 	return &result, nil
@@ -267,7 +268,7 @@ func (r *SecretRepository) Delete(ctx context.Context, ownerID, secretID uuid.UU
 		ownerID,
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("delete secret: %w", err)
 	}
 
 	rowsAffected := result.RowsAffected()
@@ -301,7 +302,7 @@ func (r *SecretRepository) UpdateEncryptedData(ctx context.Context, ownerID uuid
 		ownerID,
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("update encrypted data: %w", err)
 	}
 
 	rowsAffected := result.RowsAffected()

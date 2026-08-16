@@ -78,7 +78,7 @@ func (c *Client) Context() (context.Context, context.CancelFunc) {
 func (c *Client) AuthenticatedContext() (context.Context, context.CancelFunc, error) {
 	token, err := c.tokenStore.Load()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("authenticate context: %w", err)
 	}
 
 	ctx, cancel := c.Context()

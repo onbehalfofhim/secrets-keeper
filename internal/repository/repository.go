@@ -8,6 +8,9 @@ import (
 	"github.com/onbehalfofhim/secrets-keeper/internal/models"
 )
 
+//go:generate mockery --name UserRepo
+//go:generate mockery --name SecretRepo
+
 // UserRepo интерфейс хранилища пользователей приложения.
 type UserRepo interface {
 	Create(ctx context.Context, login, passwordHash string) (*models.User, error)

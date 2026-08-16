@@ -8,6 +8,8 @@ import (
 	"github.com/onbehalfofhim/secrets-keeper/internal/models"
 )
 
+//go:generate mockery --name Serializer
+
 var (
 	ErrUnsupportedSecretType = errors.New("unsupported secret type")
 	ErrInvalidSecretData     = errors.New("invalid secret data")

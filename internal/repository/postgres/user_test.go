@@ -16,9 +16,7 @@ import (
 	"github.com/onbehalfofhim/secrets-keeper/internal/repository"
 )
 
-func setupUserRepository(
-	t *testing.T,
-) (*UserRepository, pgxmock.PgxPoolIface, func()) {
+func setupUserRepository(t *testing.T) (*UserRepository, pgxmock.PgxPoolIface, func()) {
 	t.Helper()
 
 	db, err := pgxmock.NewPool()
@@ -57,6 +55,8 @@ func TestUserRepository_Create(t *testing.T) {
 	ctx := context.Background()
 	createdAt := time.Now()
 	userID := uuid.New()
+
+	dbErr := errors.New("database connection failed")
 
 	tests := []struct {
 		name         string
@@ -130,8 +130,6 @@ func TestUserRepository_Create(t *testing.T) {
 			login:        "test-user",
 			passwordHash: "hashed-password",
 			mock: func(mock pgxmock.PgxPoolIface) {
-				dbErr := errors.New("database connection failed")
-
 				mock.ExpectQuery(regexp.QuoteMeta(`
 					INSERT INTO users (id, login, password_hash)
 					VALUES ($1, $2, $3)
@@ -144,7 +142,7 @@ func TestUserRepository_Create(t *testing.T) {
 					).
 					WillReturnError(dbErr)
 			},
-			wantErr: errors.New("database connection failed"),
+			wantErr: dbErr,
 		},
 	}
 
@@ -166,16 +164,9 @@ func TestUserRepository_Create(t *testing.T) {
 					t.Fatal("expected error, got nil")
 				}
 
-				if tt.wantErr == repository.ErrUserExists {
-					if !errors.Is(err, repository.ErrUserExists) {
-						t.Errorf(
-							"expected ErrUserExists, got %v",
-							err,
-						)
-					}
-				} else if err.Error() != tt.wantErr.Error() {
+				if !errors.Is(err, tt.wantErr) {
 					t.Errorf(
-						"expected error %q, got %q",
+						"expected error wrapping %v, got %v",
 						tt.wantErr,
 						err,
 					)
@@ -265,6 +256,8 @@ func TestUserRepository_GetByLogin(t *testing.T) {
 	userID := uuid.New()
 	createdAt := time.Now()
 
+	dbErr := errors.New("database error")
+
 	tests := []struct {
 		name    string
 		login   string
@@ -275,7 +268,6 @@ func TestUserRepository_GetByLogin(t *testing.T) {
 		{
 			name:  "success",
 			login: "test-user",
-
 			mock: func(mock pgxmock.PgxPoolIface) {
 				rows := pgxmock.NewRows([]string{
 					"id",
@@ -301,7 +293,6 @@ func TestUserRepository_GetByLogin(t *testing.T) {
 					WithArgs("test-user").
 					WillReturnRows(rows)
 			},
-
 			want: &models.User{
 				ID:           userID,
 				Login:        "test-user",
@@ -309,11 +300,9 @@ func TestUserRepository_GetByLogin(t *testing.T) {
 				CreatedAt:    createdAt,
 			},
 		},
-
 		{
 			name:  "user not found",
 			login: "unknown-user",
-
 			mock: func(mock pgxmock.PgxPoolIface) {
 				mock.ExpectQuery(
 					`SELECT
@@ -327,17 +316,12 @@ func TestUserRepository_GetByLogin(t *testing.T) {
 					WithArgs("unknown-user").
 					WillReturnError(pgx.ErrNoRows)
 			},
-
 			wantErr: repository.ErrUserNotFound,
 		},
-
 		{
 			name:  "database error",
 			login: "test-user",
-
 			mock: func(mock pgxmock.PgxPoolIface) {
-				dbErr := errors.New("database error")
-
 				mock.ExpectQuery(
 					`SELECT
 						id,
@@ -350,8 +334,7 @@ func TestUserRepository_GetByLogin(t *testing.T) {
 					WithArgs("test-user").
 					WillReturnError(dbErr)
 			},
-
-			wantErr: errors.New("database error"),
+			wantErr: dbErr,
 		},
 	}
 
@@ -372,19 +355,9 @@ func TestUserRepository_GetByLogin(t *testing.T) {
 					t.Fatal("expected error, got nil")
 				}
 
-				if tt.wantErr == repository.ErrUserNotFound {
-					if !errors.Is(
-						err,
-						repository.ErrUserNotFound,
-					) {
-						t.Errorf(
-							"expected ErrUserNotFound, got %v",
-							err,
-						)
-					}
-				} else if err.Error() != tt.wantErr.Error() {
+				if !errors.Is(err, tt.wantErr) {
 					t.Errorf(
-						"expected error %q, got %q",
+						"expected error wrapping %v, got %v",
 						tt.wantErr,
 						err,
 					)
@@ -422,6 +395,8 @@ func TestUserRepository_GetByID(t *testing.T) {
 	userID := uuid.New()
 	createdAt := time.Now()
 
+	dbErr := errors.New("database error")
+
 	tests := []struct {
 		name string
 		id   uuid.UUID
@@ -432,7 +407,6 @@ func TestUserRepository_GetByID(t *testing.T) {
 		{
 			name: "success",
 			id:   userID,
-
 			mock: func(mock pgxmock.PgxPoolIface) {
 				rows := pgxmock.NewRows([]string{
 					"id",
@@ -458,7 +432,6 @@ func TestUserRepository_GetByID(t *testing.T) {
 					WithArgs(userID).
 					WillReturnRows(rows)
 			},
-
 			want: &models.User{
 				ID:           userID,
 				Login:        "test-user",
@@ -466,11 +439,9 @@ func TestUserRepository_GetByID(t *testing.T) {
 				CreatedAt:    createdAt,
 			},
 		},
-
 		{
 			name: "user not found",
 			id:   userID,
-
 			mock: func(mock pgxmock.PgxPoolIface) {
 				mock.ExpectQuery(
 					`SELECT
@@ -484,17 +455,12 @@ func TestUserRepository_GetByID(t *testing.T) {
 					WithArgs(userID).
 					WillReturnError(pgx.ErrNoRows)
 			},
-
 			err: repository.ErrUserNotFound,
 		},
-
 		{
 			name: "database error",
 			id:   userID,
-
 			mock: func(mock pgxmock.PgxPoolIface) {
-				dbErr := errors.New("database error")
-
 				mock.ExpectQuery(
 					`SELECT
 						id,
@@ -507,8 +473,7 @@ func TestUserRepository_GetByID(t *testing.T) {
 					WithArgs(userID).
 					WillReturnError(dbErr)
 			},
-
-			err: errors.New("database error"),
+			err: dbErr,
 		},
 	}
 
@@ -529,19 +494,9 @@ func TestUserRepository_GetByID(t *testing.T) {
 					t.Fatal("expected error, got nil")
 				}
 
-				if tt.err == repository.ErrUserNotFound {
-					if !errors.Is(
-						err,
-						repository.ErrUserNotFound,
-					) {
-						t.Errorf(
-							"expected ErrUserNotFound, got %v",
-							err,
-						)
-					}
-				} else if err.Error() != tt.err.Error() {
+				if !errors.Is(err, tt.err) {
 					t.Errorf(
-						"expected error %q, got %q",
+						"expected error wrapping %v, got %v",
 						tt.err,
 						err,
 					)
@@ -583,10 +538,7 @@ func TestUserRepository_GetByID(t *testing.T) {
 	}
 }
 
-func assertUserEqual(
-	t *testing.T,
-	got, want *models.User,
-) {
+func assertUserEqual(t *testing.T, got, want *models.User) {
 	t.Helper()
 
 	if got == nil {

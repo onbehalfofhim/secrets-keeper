@@ -68,7 +68,7 @@ func (s *SecretServer) CreateSecret(ctx context.Context, req *pb.CreateSecretReq
 	if err != nil {
 		s.logger.Info("create secret: authentication failed", "error", err)
 
-		return nil, err
+		return nil, fmt.Errorf("create secret: authentication failed: %w", err)
 	}
 
 	secret := req.GetSecret()
@@ -85,7 +85,7 @@ func (s *SecretServer) CreateSecret(ctx context.Context, req *pb.CreateSecretReq
 	if err != nil {
 		s.logger.Info("create secret: invalid request", "ownerId", ownerID, "error", err)
 
-		return nil, err
+		return nil, fmt.Errorf("create secret: invalid request: %w", err)
 	}
 
 	result, err := s.service.Create(ctx, ownerID, input)
@@ -224,7 +224,7 @@ func (s *SecretServer) UpdateSecret(ctx context.Context, req *pb.UpdateSecretReq
 	if err != nil {
 		s.logger.Info("update secret: authentication failed", "error", err)
 
-		return nil, err
+		return nil, fmt.Errorf("update secret: authentication failed: %w", err)
 	}
 
 	secret := req.GetSecret()
@@ -261,7 +261,7 @@ func (s *SecretServer) UpdateSecret(ctx context.Context, req *pb.UpdateSecretReq
 	if err != nil {
 		s.logger.Info("update secret: invalid request", "ownerId", ownerID, "secretId", secretID, "error", err)
 
-		return nil, err
+		return nil, fmt.Errorf("update secret: invalid request: %w", err)
 	}
 
 	_, err = s.service.Update(ctx, ownerID, input)
@@ -352,7 +352,7 @@ func (s *SecretServer) GetSecret(ctx context.Context, req *pb.GetSecretRequest) 
 	if err != nil {
 		s.logger.Info("get secret: authentication failed", "error", err)
 
-		return nil, err
+		return nil, fmt.Errorf("get secret: authentication failed: %w", err)
 	}
 
 	secretID, err := uuid.Parse(req.GetId())
@@ -376,7 +376,7 @@ func (s *SecretServer) GetSecret(ctx context.Context, req *pb.GetSecretRequest) 
 	if err != nil {
 		s.logger.Error("convert secret to proto failed", "ownerId", ownerID, "secretId", secretID, "error", err)
 
-		return nil, err
+		return nil, fmt.Errorf("convert secret to proto failed: %w", err)
 	}
 
 	s.logger.Info("secret retrieved", "ownerId", ownerID, "secretId", secretID, "type", secret.Type)
@@ -449,7 +449,7 @@ func (s *SecretServer) ListSecrets(ctx context.Context, req *pb.ListSecretsReque
 	if err != nil {
 		s.logger.Info("list secrets: authentication failed", "error", err)
 
-		return nil, err
+		return nil, fmt.Errorf("list secrets: authentication failed: %w", err)
 	}
 
 	secrets, err := s.service.List(ctx, ownerID)
@@ -480,7 +480,7 @@ func (s *SecretServer) DeleteSecret(ctx context.Context, req *pb.DeleteSecretReq
 	ownerID, err := getUserID(ctx)
 	if err != nil {
 		s.logger.Info("delete secret: authentication failed", "error", err)
-		return nil, err
+		return nil, fmt.Errorf("delete secret: authentication failed: %w", err)
 	}
 
 	secretID, err := uuid.Parse(req.GetId())

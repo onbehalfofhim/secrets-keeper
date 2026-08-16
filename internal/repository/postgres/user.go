@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -51,7 +52,7 @@ func (r *UserRepository) Create(ctx context.Context, login, passwordHash string)
 				return nil, repository.ErrUserExists
 			}
 		}
-		return nil, err
+		return nil, fmt.Errorf("create user: %w", err)
 	}
 
 	return &user, nil
@@ -82,7 +83,7 @@ func (r *UserRepository) GetByLogin(ctx context.Context, login string) (*models.
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, repository.ErrUserNotFound
 		}
-		return nil, err
+		return nil, fmt.Errorf("get user by login: %w", err)
 	}
 
 	return &user, nil
@@ -113,7 +114,7 @@ func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Use
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, repository.ErrUserNotFound
 		}
-		return nil, err
+		return nil, fmt.Errorf("get user by id: %w", err)
 	}
 
 	return &user, nil

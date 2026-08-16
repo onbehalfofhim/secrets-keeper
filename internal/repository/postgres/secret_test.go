@@ -9,18 +9,15 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pashagolub/pgxmock/v5"
 
 	"github.com/onbehalfofhim/secrets-keeper/internal/models"
 	"github.com/onbehalfofhim/secrets-keeper/internal/repository"
-
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
-func setupSecretRepository(
-	t *testing.T,
-) (*SecretRepository, pgxmock.PgxPoolIface, func()) {
+func setupSecretRepository(t *testing.T) (*SecretRepository, pgxmock.PgxPoolIface, func()) {
 	t.Helper()
 
 	db, err := pgxmock.NewPool()
@@ -209,7 +206,7 @@ func TestSecretRepository_Create_Error(t *testing.T) {
 	)
 
 	if !errors.Is(err, dbErr) {
-		t.Errorf("expected %v, got %v", dbErr, err)
+		t.Errorf("expected error wrapping %v, got %v", dbErr, err)
 	}
 
 	if got != nil {
@@ -228,6 +225,8 @@ func TestSecretRepository_GetByID(t *testing.T) {
 	secretID := uuid.New()
 	createdAt := time.Now()
 	updatedAt := createdAt.Add(time.Hour)
+
+	dbErr := errors.New("database error")
 
 	tests := []struct {
 		name    string
@@ -306,8 +305,6 @@ func TestSecretRepository_GetByID(t *testing.T) {
 		{
 			name: "database error",
 			mock: func(db pgxmock.PgxPoolIface) {
-				dbErr := errors.New("database error")
-
 				db.ExpectQuery(regexp.QuoteMeta(`
 					SELECT
 						id,
@@ -324,7 +321,7 @@ func TestSecretRepository_GetByID(t *testing.T) {
 					WithArgs(secretID, ownerID).
 					WillReturnError(dbErr)
 			},
-			wantErr: errors.New("database error"),
+			wantErr: dbErr,
 		},
 	}
 
@@ -346,19 +343,9 @@ func TestSecretRepository_GetByID(t *testing.T) {
 					t.Fatal("expected error, got nil")
 				}
 
-				if tt.wantErr == repository.ErrSecretNotFound {
-					if !errors.Is(
-						err,
-						repository.ErrSecretNotFound,
-					) {
-						t.Errorf(
-							"expected ErrSecretNotFound, got %v",
-							err,
-						)
-					}
-				} else if err.Error() != tt.wantErr.Error() {
+				if !errors.Is(err, tt.wantErr) {
 					t.Errorf(
-						"expected error %q, got %q",
+						"expected error wrapping %v, got %v",
 						tt.wantErr,
 						err,
 					)
@@ -548,7 +535,7 @@ func TestSecretRepository_List_QueryError(t *testing.T) {
 
 	if !errors.Is(err, dbErr) {
 		t.Errorf(
-			"expected %v, got %v",
+			"expected error wrapping %v, got %v",
 			dbErr,
 			err,
 		)
@@ -683,7 +670,7 @@ func TestSecretRepository_List_RowsError(t *testing.T) {
 
 	if !errors.Is(err, rowsErr) {
 		t.Errorf(
-			"expected %v, got %v",
+			"expected error wrapping %v, got %v",
 			rowsErr,
 			err,
 		)
@@ -1005,7 +992,7 @@ func TestSecretRepository_Update_DatabaseError(t *testing.T) {
 
 	if !errors.Is(err, dbErr) {
 		t.Errorf(
-			"expected %v, got %v",
+			"expected error wrapping %v, got %v",
 			dbErr,
 			err,
 		)
@@ -1032,6 +1019,8 @@ func TestSecretRepository_Delete(t *testing.T) {
 	ownerID := uuid.New()
 	secretID := uuid.New()
 
+	dbErr := errors.New("database error")
+
 	tests := []struct {
 		name       string
 		result     pgconn.CommandTag
@@ -1049,8 +1038,8 @@ func TestSecretRepository_Delete(t *testing.T) {
 		},
 		{
 			name:       "database error",
-			queryError: errors.New("database error"),
-			wantErr:    errors.New("database error"),
+			queryError: dbErr,
+			wantErr:    dbErr,
 		},
 	}
 
@@ -1086,19 +1075,9 @@ func TestSecretRepository_Delete(t *testing.T) {
 					t.Fatal("expected error, got nil")
 				}
 
-				if tt.wantErr == repository.ErrSecretNotFound {
-					if !errors.Is(
-						err,
-						repository.ErrSecretNotFound,
-					) {
-						t.Errorf(
-							"expected ErrSecretNotFound, got %v",
-							err,
-						)
-					}
-				} else if err.Error() != tt.wantErr.Error() {
+				if !errors.Is(err, tt.wantErr) {
 					t.Errorf(
-						"expected error %q, got %q",
+						"expected error wrapping %v, got %v",
 						tt.wantErr,
 						err,
 					)
@@ -1127,6 +1106,8 @@ func TestSecretRepository_UpdateEncryptedData(t *testing.T) {
 	secretID := uuid.New()
 	encryptedData := []byte("new encrypted data")
 
+	dbErr := errors.New("database error")
+
 	tests := []struct {
 		name       string
 		result     pgconn.CommandTag
@@ -1144,8 +1125,8 @@ func TestSecretRepository_UpdateEncryptedData(t *testing.T) {
 		},
 		{
 			name:       "database error",
-			queryError: errors.New("database error"),
-			wantErr:    errors.New("database error"),
+			queryError: dbErr,
+			wantErr:    dbErr,
 		},
 	}
 
@@ -1185,19 +1166,9 @@ func TestSecretRepository_UpdateEncryptedData(t *testing.T) {
 					t.Fatal("expected error, got nil")
 				}
 
-				if tt.wantErr == repository.ErrSecretNotFound {
-					if !errors.Is(
-						err,
-						repository.ErrSecretNotFound,
-					) {
-						t.Errorf(
-							"expected ErrSecretNotFound, got %v",
-							err,
-						)
-					}
-				} else if err.Error() != tt.wantErr.Error() {
+				if !errors.Is(err, tt.wantErr) {
 					t.Errorf(
-						"expected error %q, got %q",
+						"expected error wrapping %v, got %v",
 						tt.wantErr,
 						err,
 					)
@@ -1219,10 +1190,7 @@ func TestSecretRepository_UpdateEncryptedData(t *testing.T) {
 	}
 }
 
-func assertSecretEqual(
-	t *testing.T,
-	got, want *models.Secret,
-) {
+func assertSecretEqual(t *testing.T, got, want *models.Secret) {
 	t.Helper()
 
 	if got == nil {

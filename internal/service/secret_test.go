@@ -7,25 +7,17 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/mock"
 
-	"github.com/onbehalfofhim/secrets-keeper/internal/crypto"
 	"github.com/onbehalfofhim/secrets-keeper/internal/models"
 	"github.com/onbehalfofhim/secrets-keeper/internal/repository"
-	"github.com/onbehalfofhim/secrets-keeper/internal/serializer"
+	"github.com/onbehalfofhim/secrets-keeper/internal/service/mocks"
 )
 
-func newTestSecretService(
-	repo repository.SecretRepo,
-	encryptor crypto.Encryptor,
-	serializer serializer.Serializer,
-) *SecretService {
-	return NewSecretService(repo, encryptor, serializer)
-}
-
 func TestNewSecretService(t *testing.T) {
-	repo := &mockSecretRepository{}
-	encryptor := &mockEncryptor{}
-	serializer := &mockSerializer{}
+	repo := mocks.NewMockSecretRepo(t)
+	encryptor := mocks.NewMockEncryptor(t)
+	serializer := mocks.NewMockSerializer(t)
 
 	service := NewSecretService(repo, encryptor, serializer)
 
@@ -59,14 +51,15 @@ func TestSecretService_Create(t *testing.T) {
 	repositoryErr := errors.New("repository failed")
 
 	tests := []struct {
-		name string
-
+		name    string
 		ownerID uuid.UUID
 		input   CreateSecretInput
 
-		serializeFunc func(any) ([]byte, error)
-		encryptFunc   func([]byte) ([]byte, error)
-		createFunc    func(context.Context, *models.Secret) (*models.Secret, error)
+		setupMock func(
+			*mocks.MockSecretRepo,
+			*mocks.MockEncryptor,
+			*mocks.MockSerializer,
+		)
 
 		wantErr error
 	}{
@@ -83,7 +76,7 @@ func TestSecretService_Create(t *testing.T) {
 			name:    "empty secret type",
 			ownerID: ownerID,
 			input: CreateSecretInput{
-				Type: "",
+				Type: models.SecretType(""),
 				Data: "secret",
 			},
 			wantErr: ErrInvalidSecretType,
@@ -104,8 +97,14 @@ func TestSecretService_Create(t *testing.T) {
 				Type: models.SecretText,
 				Data: "secret",
 			},
-			serializeFunc: func(data any) ([]byte, error) {
-				return nil, serializeErr
+			setupMock: func(
+				_ *mocks.MockSecretRepo,
+				_ *mocks.MockEncryptor,
+				s *mocks.MockSerializer,
+			) {
+				s.EXPECT().
+					Serialize("secret").
+					Return(nil, serializeErr)
 			},
 			wantErr: serializeErr,
 		},
@@ -116,11 +115,18 @@ func TestSecretService_Create(t *testing.T) {
 				Type: models.SecretText,
 				Data: "secret",
 			},
-			serializeFunc: func(data any) ([]byte, error) {
-				return serializedData, nil
-			},
-			encryptFunc: func(data []byte) ([]byte, error) {
-				return nil, encryptErr
+			setupMock: func(
+				_ *mocks.MockSecretRepo,
+				e *mocks.MockEncryptor,
+				s *mocks.MockSerializer,
+			) {
+				s.EXPECT().
+					Serialize("secret").
+					Return(serializedData, nil)
+
+				e.EXPECT().
+					Encrypt(serializedData).
+					Return(nil, encryptErr)
 			},
 			wantErr: encryptErr,
 		},
@@ -132,17 +138,25 @@ func TestSecretService_Create(t *testing.T) {
 				Data:     "secret",
 				Metadata: metadata,
 			},
-			serializeFunc: func(data any) ([]byte, error) {
-				return serializedData, nil
-			},
-			encryptFunc: func(data []byte) ([]byte, error) {
-				return encryptedData, nil
-			},
-			createFunc: func(
-				ctx context.Context,
-				secret *models.Secret,
-			) (*models.Secret, error) {
-				return nil, repositoryErr
+			setupMock: func(
+				r *mocks.MockSecretRepo,
+				e *mocks.MockEncryptor,
+				s *mocks.MockSerializer,
+			) {
+				s.EXPECT().
+					Serialize("secret").
+					Return(serializedData, nil)
+
+				e.EXPECT().
+					Encrypt(serializedData).
+					Return(encryptedData, nil)
+
+				r.EXPECT().
+					Create(
+						mock.Anything,
+						mock.AnythingOfType("*models.Secret"),
+					).
+					Return(nil, repositoryErr)
 			},
 			wantErr: repositoryErr,
 		},
@@ -153,11 +167,28 @@ func TestSecretService_Create(t *testing.T) {
 				Type:     models.SecretBinary,
 				Metadata: metadata,
 			},
-			createFunc: func(
-				ctx context.Context,
-				secret *models.Secret,
-			) (*models.Secret, error) {
-				return secret, nil
+			setupMock: func(
+				r *mocks.MockSecretRepo,
+				_ *mocks.MockEncryptor,
+				_ *mocks.MockSerializer,
+			) {
+				r.EXPECT().
+					Create(
+						mock.Anything,
+						mock.MatchedBy(func(secret *models.Secret) bool {
+							return secret.OwnerID == ownerID &&
+								secret.Type == models.SecretBinary &&
+								secret.ID != uuid.Nil &&
+								string(secret.Metadata) == string(metadata) &&
+								secret.EncryptedData == nil
+						}),
+					).
+					Return(&models.Secret{
+						ID:       uuid.New(),
+						OwnerID:  ownerID,
+						Type:     models.SecretBinary,
+						Metadata: metadata,
+					}, nil)
 			},
 		},
 		{
@@ -168,30 +199,51 @@ func TestSecretService_Create(t *testing.T) {
 				Data:     "secret",
 				Metadata: metadata,
 			},
-			serializeFunc: func(data any) ([]byte, error) {
-				return serializedData, nil
-			},
-			encryptFunc: func(data []byte) ([]byte, error) {
-				return encryptedData, nil
+			setupMock: func(
+				r *mocks.MockSecretRepo,
+				e *mocks.MockEncryptor,
+				s *mocks.MockSerializer,
+			) {
+				s.EXPECT().
+					Serialize("secret").
+					Return(serializedData, nil)
+
+				e.EXPECT().
+					Encrypt(serializedData).
+					Return(encryptedData, nil)
+
+				r.EXPECT().
+					Create(
+						mock.Anything,
+						mock.MatchedBy(func(secret *models.Secret) bool {
+							return secret.OwnerID == ownerID &&
+								secret.Type == models.SecretText &&
+								string(secret.EncryptedData) == string(encryptedData) &&
+								string(secret.Metadata) == string(metadata)
+						}),
+					).
+					Return(&models.Secret{
+						ID:            uuid.New(),
+						OwnerID:       ownerID,
+						Type:          models.SecretText,
+						EncryptedData: encryptedData,
+						Metadata:      metadata,
+					}, nil)
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := &mockSecretRepository{
-				createFunc: tt.createFunc,
+			repo := mocks.NewMockSecretRepo(t)
+			encryptor := mocks.NewMockEncryptor(t)
+			serializer := mocks.NewMockSerializer(t)
+
+			if tt.setupMock != nil {
+				tt.setupMock(repo, encryptor, serializer)
 			}
 
-			encryptor := &mockEncryptor{
-				encryptFunc: tt.encryptFunc,
-			}
-
-			serializer := &mockSerializer{
-				serializeFunc: tt.serializeFunc,
-			}
-
-			service := newTestSecretService(
+			service := NewSecretService(
 				repo,
 				encryptor,
 				serializer,
@@ -234,103 +286,53 @@ func TestSecretService_Create(t *testing.T) {
 				t.Fatal("expected secret, got nil")
 			}
 
-			if !repo.createCalled {
-				t.Fatal("expected repository Create to be called")
-			}
-
-			created := repo.createdSecret
-
-			if created == nil {
-				t.Fatal("expected created secret, got nil")
-			}
-
-			if created.ID == uuid.Nil {
-				t.Error("expected generated secret ID")
-			}
-
-			if created.OwnerID != tt.ownerID {
+			if got.OwnerID != tt.ownerID {
 				t.Errorf(
 					"OwnerID = %v, want %v",
-					created.OwnerID,
+					got.OwnerID,
 					tt.ownerID,
 				)
 			}
 
-			if created.Type != tt.input.Type {
+			if got.Type != tt.input.Type {
 				t.Errorf(
 					"Type = %q, want %q",
-					created.Type,
+					got.Type,
 					tt.input.Type,
 				)
 			}
 
 			if tt.input.Metadata == nil {
-				if string(created.Metadata) != `{}` {
+				if string(got.Metadata) != `{}` {
 					t.Errorf(
 						"Metadata = %q, want %q",
-						created.Metadata,
+						got.Metadata,
 						`{}`,
 					)
 				}
-			} else if string(created.Metadata) != string(tt.input.Metadata) {
+			} else if string(got.Metadata) != string(tt.input.Metadata) {
 				t.Errorf(
 					"Metadata = %q, want %q",
-					created.Metadata,
+					got.Metadata,
 					tt.input.Metadata,
 				)
 			}
 
 			if tt.input.Type == models.SecretBinary {
-				if serializer.serializeCalled {
-					t.Error(
-						"Serialize should not be called for binary secret",
-					)
-				}
-
-				if encryptor.encryptCalled {
-					t.Error(
-						"Encrypt should not be called for binary secret",
-					)
-				}
-
-				if created.EncryptedData != nil {
+				if got.EncryptedData != nil {
 					t.Errorf(
 						"EncryptedData = %v, want nil",
-						created.EncryptedData,
+						got.EncryptedData,
 					)
 				}
 
 				return
 			}
 
-			if !serializer.serializeCalled {
-				t.Fatal("expected Serialize to be called")
-			}
-
-			if serializer.serializeInput != tt.input.Data {
-				t.Errorf(
-					"Serialize input = %v, want %v",
-					serializer.serializeInput,
-					tt.input.Data,
-				)
-			}
-
-			if !encryptor.encryptCalled {
-				t.Fatal("expected Encrypt to be called")
-			}
-
-			if string(encryptor.encryptInput) != string(serializedData) {
-				t.Errorf(
-					"Encrypt input = %q, want %q",
-					encryptor.encryptInput,
-					serializedData,
-				)
-			}
-
-			if string(created.EncryptedData) != string(encryptedData) {
+			if string(got.EncryptedData) != string(encryptedData) {
 				t.Errorf(
 					"EncryptedData = %q, want %q",
-					created.EncryptedData,
+					got.EncryptedData,
 					encryptedData,
 				)
 			}
@@ -358,78 +360,112 @@ func TestSecretService_Get(t *testing.T) {
 	deserializeErr := errors.New("deserialize failed")
 
 	tests := []struct {
-		name string
-
+		name   string
 		secret *models.Secret
 
-		getByIDFunc     func(context.Context, uuid.UUID, uuid.UUID) (*models.Secret, error)
-		decryptFunc     func([]byte) ([]byte, error)
-		deserializeFunc func(models.SecretType, []byte) (any, error)
+		setupMock func(
+			*mocks.MockSecretRepo,
+			*mocks.MockEncryptor,
+			*mocks.MockSerializer,
+		)
 
 		want    any
 		wantErr error
 	}{
 		{
 			name: "repository error",
-			getByIDFunc: func(
-				ctx context.Context,
-				ownerID, secretID uuid.UUID,
-			) (*models.Secret, error) {
-				return nil, repository.ErrSecretNotFound
+			setupMock: func(
+				r *mocks.MockSecretRepo,
+				_ *mocks.MockEncryptor,
+				_ *mocks.MockSerializer,
+			) {
+				r.EXPECT().
+					GetByID(
+						mock.Anything,
+						ownerID,
+						secretID,
+					).
+					Return(nil, repository.ErrSecretNotFound)
 			},
 			wantErr: repository.ErrSecretNotFound,
 		},
 		{
 			name:   "decrypt error",
 			secret: secret,
-			getByIDFunc: func(
-				ctx context.Context,
-				ownerID, secretID uuid.UUID,
-			) (*models.Secret, error) {
-				return secret, nil
-			},
-			decryptFunc: func(data []byte) ([]byte, error) {
-				return nil, decryptErr
+			setupMock: func(
+				r *mocks.MockSecretRepo,
+				e *mocks.MockEncryptor,
+				_ *mocks.MockSerializer,
+			) {
+				r.EXPECT().
+					GetByID(
+						mock.Anything,
+						ownerID,
+						secretID,
+					).
+					Return(secret, nil)
+
+				e.EXPECT().
+					Decrypt(secret.EncryptedData).
+					Return(nil, decryptErr)
 			},
 			wantErr: decryptErr,
 		},
 		{
 			name:   "deserialize error",
 			secret: secret,
-			getByIDFunc: func(
-				ctx context.Context,
-				ownerID, secretID uuid.UUID,
-			) (*models.Secret, error) {
-				return secret, nil
-			},
-			decryptFunc: func(data []byte) ([]byte, error) {
-				return decryptedData, nil
-			},
-			deserializeFunc: func(
-				secretType models.SecretType,
-				data []byte,
-			) (any, error) {
-				return nil, deserializeErr
+			setupMock: func(
+				r *mocks.MockSecretRepo,
+				e *mocks.MockEncryptor,
+				s *mocks.MockSerializer,
+			) {
+				r.EXPECT().
+					GetByID(
+						mock.Anything,
+						ownerID,
+						secretID,
+					).
+					Return(secret, nil)
+
+				e.EXPECT().
+					Decrypt(secret.EncryptedData).
+					Return(decryptedData, nil)
+
+				s.EXPECT().
+					Deserialize(
+						secret.Type,
+						decryptedData,
+					).
+					Return(nil, deserializeErr)
 			},
 			wantErr: deserializeErr,
 		},
 		{
 			name:   "success structured secret",
 			secret: secret,
-			getByIDFunc: func(
-				ctx context.Context,
-				ownerID, secretID uuid.UUID,
-			) (*models.Secret, error) {
-				return secret, nil
-			},
-			decryptFunc: func(data []byte) ([]byte, error) {
-				return decryptedData, nil
-			},
-			deserializeFunc: func(
-				secretType models.SecretType,
-				data []byte,
-			) (any, error) {
-				return deserializedData, nil
+			setupMock: func(
+				r *mocks.MockSecretRepo,
+				e *mocks.MockEncryptor,
+				s *mocks.MockSerializer,
+			) {
+				r.EXPECT().
+					GetByID(
+						mock.Anything,
+						ownerID,
+						secretID,
+					).
+					Return(secret, nil)
+
+				e.EXPECT().
+					Decrypt(secret.EncryptedData).
+					Return(decryptedData, nil)
+
+				s.EXPECT().
+					Deserialize(
+						secret.Type,
+						decryptedData,
+					).
+					Return(deserializedData, nil)
 			},
 			want: deserializedData,
 		},
@@ -444,38 +480,41 @@ func TestSecretService_Get(t *testing.T) {
 					"mime_type": "application/pdf"
 				}`),
 			},
-			getByIDFunc: func(
-				ctx context.Context,
-				ownerID, secretID uuid.UUID,
-			) (*models.Secret, error) {
-				return &models.Secret{
-					ID:      secretID,
-					OwnerID: ownerID,
-					Type:    models.SecretBinary,
-					Metadata: json.RawMessage(`{
-						"filename": "document.pdf",
-						"mime_type": "application/pdf"
-					}`),
-				}, nil
+			setupMock: func(
+				r *mocks.MockSecretRepo,
+				_ *mocks.MockEncryptor,
+				_ *mocks.MockSerializer,
+			) {
+				r.EXPECT().
+					GetByID(
+						mock.Anything,
+						ownerID,
+						secretID,
+					).
+					Return(&models.Secret{
+						ID:      secretID,
+						OwnerID: ownerID,
+						Type:    models.SecretBinary,
+						Metadata: json.RawMessage(`{
+							"filename": "document.pdf",
+							"mime_type": "application/pdf"
+						}`),
+					}, nil)
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := &mockSecretRepository{
-				getByIDFunc: tt.getByIDFunc,
+			repo := mocks.NewMockSecretRepo(t)
+			encryptor := mocks.NewMockEncryptor(t)
+			serializer := mocks.NewMockSerializer(t)
+
+			if tt.setupMock != nil {
+				tt.setupMock(repo, encryptor, serializer)
 			}
 
-			encryptor := &mockEncryptor{
-				decryptFunc: tt.decryptFunc,
-			}
-
-			serializer := &mockSerializer{
-				deserializeFunc: tt.deserializeFunc,
-			}
-
-			service := newTestSecretService(
+			service := NewSecretService(
 				repo,
 				encryptor,
 				serializer,
@@ -517,7 +556,7 @@ func TestSecretService_Get(t *testing.T) {
 				t.Fatal("expected secret, got nil")
 			}
 
-			if tt.secret != nil && gotSecret.ID != tt.secret.ID {
+			if gotSecret.ID != tt.secret.ID {
 				t.Errorf(
 					"ID = %v, want %v",
 					gotSecret.ID,
@@ -525,31 +564,15 @@ func TestSecretService_Get(t *testing.T) {
 				)
 			}
 
-			if tt.want != nil {
-				if gotData != tt.want {
-					t.Errorf(
-						"data = %v, want %v",
-						gotData,
-						tt.want,
-					)
-				}
+			if tt.want != nil && gotData != tt.want {
+				t.Errorf(
+					"data = %v, want %v",
+					gotData,
+					tt.want,
+				)
 			}
 
-			if tt.secret != nil &&
-				tt.secret.Type == models.SecretBinary {
-
-				if encryptor.decryptCalled {
-					t.Error(
-						"Decrypt should not be called for binary secret",
-					)
-				}
-
-				if serializer.deserializeCalled {
-					t.Error(
-						"Deserialize should not be called for binary secret",
-					)
-				}
-
+			if tt.secret.Type == models.SecretBinary {
 				if gotData == nil {
 					t.Fatal("expected binary metadata, got nil")
 				}
@@ -563,38 +586,6 @@ func TestSecretService_Get(t *testing.T) {
 
 				return
 			}
-
-			if !encryptor.decryptCalled {
-				t.Error("expected Decrypt to be called")
-			}
-
-			if string(encryptor.decryptInput) != string(secret.EncryptedData) {
-				t.Errorf(
-					"Decrypt input = %q, want %q",
-					encryptor.decryptInput,
-					secret.EncryptedData,
-				)
-			}
-
-			if !serializer.deserializeCalled {
-				t.Error("expected Deserialize to be called")
-			}
-
-			if serializer.deserializeType != secret.Type {
-				t.Errorf(
-					"Deserialize type = %q, want %q",
-					serializer.deserializeType,
-					secret.Type,
-				)
-			}
-
-			if string(serializer.deserializeInput) != string(decryptedData) {
-				t.Errorf(
-					"Deserialize input = %q, want %q",
-					serializer.deserializeInput,
-					decryptedData,
-				)
-			}
 		})
 	}
 }
@@ -603,24 +594,24 @@ func TestSecretService_Get_BinaryInvalidMetadata(t *testing.T) {
 	ownerID := uuid.New()
 	secretID := uuid.New()
 
-	repo := &mockSecretRepository{
-		getByIDFunc: func(
-			ctx context.Context,
-			ownerID, secretID uuid.UUID,
-		) (*models.Secret, error) {
-			return &models.Secret{
-				ID:       secretID,
-				OwnerID:  ownerID,
-				Type:     models.SecretBinary,
-				Metadata: []byte(`invalid json`),
-			}, nil
-		},
-	}
+	repo := mocks.NewMockSecretRepo(t)
+	encryptor := mocks.NewMockEncryptor(t)
+	serializer := mocks.NewMockSerializer(t)
 
-	encryptor := &mockEncryptor{}
-	serializer := &mockSerializer{}
+	repo.EXPECT().
+		GetByID(
+			mock.Anything,
+			ownerID,
+			secretID,
+		).
+		Return(&models.Secret{
+			ID:       secretID,
+			OwnerID:  ownerID,
+			Type:     models.SecretBinary,
+			Metadata: []byte(`invalid json`),
+		}, nil)
 
-	service := newTestSecretService(
+	service := NewSecretService(
 		repo,
 		encryptor,
 		serializer,
@@ -638,14 +629,6 @@ func TestSecretService_Get_BinaryInvalidMetadata(t *testing.T) {
 
 	if secret != nil || data != nil {
 		t.Error("expected nil secret and data")
-	}
-
-	if encryptor.decryptCalled {
-		t.Error("Decrypt should not be called")
-	}
-
-	if serializer.deserializeCalled {
-		t.Error("Deserialize should not be called")
 	}
 }
 
@@ -668,26 +651,30 @@ func TestSecretService_List(t *testing.T) {
 	listErr := errors.New("list failed")
 
 	tests := []struct {
-		name     string
-		listFunc func(context.Context, uuid.UUID) ([]*models.Secret, error)
-		wantErr  error
+		name    string
+		setup   func(*mocks.MockSecretRepo)
+		wantErr error
 	}{
 		{
 			name: "success",
-			listFunc: func(
-				ctx context.Context,
-				ownerID uuid.UUID,
-			) ([]*models.Secret, error) {
-				return expected, nil
+			setup: func(repo *mocks.MockSecretRepo) {
+				repo.EXPECT().
+					List(
+						mock.Anything,
+						ownerID,
+					).
+					Return(expected, nil)
 			},
 		},
 		{
 			name: "repository error",
-			listFunc: func(
-				ctx context.Context,
-				ownerID uuid.UUID,
-			) ([]*models.Secret, error) {
-				return nil, listErr
+			setup: func(repo *mocks.MockSecretRepo) {
+				repo.EXPECT().
+					List(
+						mock.Anything,
+						ownerID,
+					).
+					Return(nil, listErr)
 			},
 			wantErr: listErr,
 		},
@@ -695,14 +682,16 @@ func TestSecretService_List(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := &mockSecretRepository{
-				listFunc: tt.listFunc,
-			}
+			repo := mocks.NewMockSecretRepo(t)
+			encryptor := mocks.NewMockEncryptor(t)
+			serializer := mocks.NewMockSerializer(t)
 
-			service := newTestSecretService(
+			tt.setup(repo)
+
+			service := NewSecretService(
 				repo,
-				&mockEncryptor{},
-				&mockSerializer{},
+				encryptor,
+				serializer,
 			)
 
 			got, err := service.List(
@@ -748,18 +737,6 @@ func TestSecretService_List(t *testing.T) {
 					)
 				}
 			}
-
-			if !repo.listCalled {
-				t.Fatal("expected List to be called")
-			}
-
-			if repo.listOwnerID != ownerID {
-				t.Errorf(
-					"List ownerID = %v, want %v",
-					repo.listOwnerID,
-					ownerID,
-				)
-			}
 		})
 	}
 }
@@ -778,14 +755,15 @@ func TestSecretService_Update(t *testing.T) {
 	repositoryErr := errors.New("repository update failed")
 
 	tests := []struct {
-		name string
-
+		name    string
 		ownerID uuid.UUID
 		input   UpdateSecretInput
 
-		serializeFunc func(any) ([]byte, error)
-		encryptFunc   func([]byte) ([]byte, error)
-		updateFunc    func(context.Context, *models.Secret) (*models.Secret, error)
+		setupMock func(
+			*mocks.MockSecretRepo,
+			*mocks.MockEncryptor,
+			*mocks.MockSerializer,
+		)
 
 		wantErr error
 	}{
@@ -827,8 +805,14 @@ func TestSecretService_Update(t *testing.T) {
 				Type: models.SecretText,
 				Data: "secret",
 			},
-			serializeFunc: func(data any) ([]byte, error) {
-				return nil, serializeErr
+			setupMock: func(
+				_ *mocks.MockSecretRepo,
+				_ *mocks.MockEncryptor,
+				s *mocks.MockSerializer,
+			) {
+				s.EXPECT().
+					Serialize("secret").
+					Return(nil, serializeErr)
 			},
 			wantErr: serializeErr,
 		},
@@ -840,11 +824,18 @@ func TestSecretService_Update(t *testing.T) {
 				Type: models.SecretText,
 				Data: "secret",
 			},
-			serializeFunc: func(data any) ([]byte, error) {
-				return serializedData, nil
-			},
-			encryptFunc: func(data []byte) ([]byte, error) {
-				return nil, encryptErr
+			setupMock: func(
+				_ *mocks.MockSecretRepo,
+				e *mocks.MockEncryptor,
+				s *mocks.MockSerializer,
+			) {
+				s.EXPECT().
+					Serialize("secret").
+					Return(serializedData, nil)
+
+				e.EXPECT().
+					Encrypt(serializedData).
+					Return(nil, encryptErr)
 			},
 			wantErr: encryptErr,
 		},
@@ -857,17 +848,29 @@ func TestSecretService_Update(t *testing.T) {
 				Data:     "secret",
 				Metadata: json.RawMessage(`{}`),
 			},
-			serializeFunc: func(data any) ([]byte, error) {
-				return serializedData, nil
-			},
-			encryptFunc: func(data []byte) ([]byte, error) {
-				return encryptedData, nil
-			},
-			updateFunc: func(
-				ctx context.Context,
-				secret *models.Secret,
-			) (*models.Secret, error) {
-				return nil, repositoryErr
+			setupMock: func(
+				r *mocks.MockSecretRepo,
+				e *mocks.MockEncryptor,
+				s *mocks.MockSerializer,
+			) {
+				s.EXPECT().
+					Serialize("secret").
+					Return(serializedData, nil)
+
+				e.EXPECT().
+					Encrypt(serializedData).
+					Return(encryptedData, nil)
+
+				r.EXPECT().
+					Update(
+						mock.Anything,
+						mock.MatchedBy(func(secret *models.Secret) bool {
+							return secret.ID == secretID &&
+								secret.OwnerID == ownerID &&
+								secret.Type == models.SecretText
+						}),
+					).
+					Return(nil, repositoryErr)
 			},
 			wantErr: repositoryErr,
 		},
@@ -880,11 +883,36 @@ func TestSecretService_Update(t *testing.T) {
 				Data:     "secret",
 				Metadata: json.RawMessage(`{"name":"test"}`),
 			},
-			serializeFunc: func(data any) ([]byte, error) {
-				return serializedData, nil
-			},
-			encryptFunc: func(data []byte) ([]byte, error) {
-				return encryptedData, nil
+			setupMock: func(
+				r *mocks.MockSecretRepo,
+				e *mocks.MockEncryptor,
+				s *mocks.MockSerializer,
+			) {
+				s.EXPECT().
+					Serialize("secret").
+					Return(serializedData, nil)
+
+				e.EXPECT().
+					Encrypt(serializedData).
+					Return(encryptedData, nil)
+
+				r.EXPECT().
+					Update(
+						mock.Anything,
+						mock.MatchedBy(func(secret *models.Secret) bool {
+							return secret.ID == secretID &&
+								secret.OwnerID == ownerID &&
+								secret.Type == models.SecretText &&
+								string(secret.EncryptedData) == string(encryptedData)
+						}),
+					).
+					Return(&models.Secret{
+						ID:            secretID,
+						OwnerID:       ownerID,
+						Type:          models.SecretText,
+						EncryptedData: encryptedData,
+						Metadata:      json.RawMessage(`{"name":"test"}`),
+					}, nil)
 			},
 		},
 		{
@@ -896,27 +924,47 @@ func TestSecretService_Update(t *testing.T) {
 				Data:     []byte("binary data"),
 				Metadata: json.RawMessage(`{}`),
 			},
-			encryptFunc: func(data []byte) ([]byte, error) {
-				return encryptedData, nil
+			setupMock: func(
+				r *mocks.MockSecretRepo,
+				e *mocks.MockEncryptor,
+				_ *mocks.MockSerializer,
+			) {
+				e.EXPECT().
+					Encrypt([]byte("binary data")).
+					Return(encryptedData, nil)
+
+				r.EXPECT().
+					Update(
+						mock.Anything,
+						mock.MatchedBy(func(secret *models.Secret) bool {
+							return secret.ID == secretID &&
+								secret.OwnerID == ownerID &&
+								secret.Type == models.SecretBinary &&
+								string(secret.EncryptedData) == string(encryptedData)
+						}),
+					).
+					Return(&models.Secret{
+						ID:            secretID,
+						OwnerID:       ownerID,
+						Type:          models.SecretBinary,
+						EncryptedData: encryptedData,
+						Metadata:      json.RawMessage(`{}`),
+					}, nil)
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := &mockSecretRepository{
-				updateFunc: tt.updateFunc,
+			repo := mocks.NewMockSecretRepo(t)
+			encryptor := mocks.NewMockEncryptor(t)
+			serializer := mocks.NewMockSerializer(t)
+
+			if tt.setupMock != nil {
+				tt.setupMock(repo, encryptor, serializer)
 			}
 
-			encryptor := &mockEncryptor{
-				encryptFunc: tt.encryptFunc,
-			}
-
-			serializer := &mockSerializer{
-				serializeFunc: tt.serializeFunc,
-			}
-
-			service := newTestSecretService(
+			service := NewSecretService(
 				repo,
 				encryptor,
 				serializer,
@@ -955,92 +1003,40 @@ func TestSecretService_Update(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			if !repo.updateCalled {
-				t.Fatal("expected repository Update to be called")
+			if got == nil {
+				t.Fatal("expected secret, got nil")
 			}
 
-			updated := repo.updatedSecret
-
-			if updated == nil {
-				t.Fatal("expected updated secret, got nil")
-			}
-
-			if updated.ID != tt.input.ID {
+			if got.ID != secretID {
 				t.Errorf(
 					"ID = %v, want %v",
-					updated.ID,
-					tt.input.ID,
+					got.ID,
+					secretID,
 				)
 			}
 
-			if updated.OwnerID != tt.ownerID {
+			if got.OwnerID != ownerID {
 				t.Errorf(
 					"OwnerID = %v, want %v",
-					updated.OwnerID,
-					tt.ownerID,
+					got.OwnerID,
+					ownerID,
 				)
 			}
 
-			if updated.Type != tt.input.Type {
+			if got.Type != tt.input.Type {
 				t.Errorf(
 					"Type = %q, want %q",
-					updated.Type,
+					got.Type,
 					tt.input.Type,
 				)
 			}
 
-			if string(updated.EncryptedData) != string(encryptedData) {
+			if string(got.EncryptedData) != string(encryptedData) {
 				t.Errorf(
 					"EncryptedData = %q, want %q",
-					updated.EncryptedData,
+					got.EncryptedData,
 					encryptedData,
 				)
-			}
-
-			if tt.input.Type == models.SecretBinary {
-				if serializer.serializeCalled {
-					t.Error(
-						"Serialize should not be called for binary secret",
-					)
-				}
-
-				if !encryptor.encryptCalled {
-					t.Fatal("expected Encrypt to be called")
-				}
-
-				if string(encryptor.encryptInput) !=
-					string(tt.input.Data.([]byte)) {
-					t.Errorf(
-						"Encrypt input = %q, want %q",
-						encryptor.encryptInput,
-						tt.input.Data,
-					)
-				}
-			} else {
-				if !serializer.serializeCalled {
-					t.Fatal("expected Serialize to be called")
-				}
-
-				if serializer.serializeInput != tt.input.Data {
-					t.Errorf(
-						"Serialize input = %v, want %v",
-						serializer.serializeInput,
-						tt.input.Data,
-					)
-				}
-
-				if !encryptor.encryptCalled {
-					t.Fatal("expected Encrypt to be called")
-				}
-
-				if string(encryptor.encryptInput) !=
-					string(serializedData) {
-					t.Errorf(
-						"Encrypt input = %q, want %q",
-						encryptor.encryptInput,
-						serializedData,
-					)
-				}
 			}
 		})
 	}
@@ -1053,20 +1049,32 @@ func TestSecretService_Delete(t *testing.T) {
 	deleteErr := errors.New("delete failed")
 
 	tests := []struct {
-		name       string
-		deleteFunc func(context.Context, uuid.UUID, uuid.UUID) error
-		wantErr    error
+		name    string
+		setup   func(*mocks.MockSecretRepo)
+		wantErr error
 	}{
 		{
 			name: "success",
+			setup: func(repo *mocks.MockSecretRepo) {
+				repo.EXPECT().
+					Delete(
+						mock.Anything,
+						ownerID,
+						secretID,
+					).
+					Return(nil)
+			},
 		},
 		{
 			name: "repository error",
-			deleteFunc: func(
-				ctx context.Context,
-				ownerID, secretID uuid.UUID,
-			) error {
-				return deleteErr
+			setup: func(repo *mocks.MockSecretRepo) {
+				repo.EXPECT().
+					Delete(
+						mock.Anything,
+						ownerID,
+						secretID,
+					).
+					Return(deleteErr)
 			},
 			wantErr: deleteErr,
 		},
@@ -1074,14 +1082,16 @@ func TestSecretService_Delete(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := &mockSecretRepository{
-				deleteFunc: tt.deleteFunc,
-			}
+			repo := mocks.NewMockSecretRepo(t)
+			encryptor := mocks.NewMockEncryptor(t)
+			serializer := mocks.NewMockSerializer(t)
 
-			service := newTestSecretService(
+			tt.setup(repo)
+
+			service := NewSecretService(
 				repo,
-				&mockEncryptor{},
-				&mockSerializer{},
+				encryptor,
+				serializer,
 			)
 
 			err := service.Delete(
@@ -1102,28 +1112,12 @@ func TestSecretService_Delete(t *testing.T) {
 						err,
 					)
 				}
-			} else if err != nil {
+
+				return
+			}
+
+			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if !repo.deleteCalled {
-				t.Fatal("expected Delete to be called")
-			}
-
-			if repo.deleteOwnerID != ownerID {
-				t.Errorf(
-					"ownerID = %v, want %v",
-					repo.deleteOwnerID,
-					ownerID,
-				)
-			}
-
-			if repo.deleteSecretID != secretID {
-				t.Errorf(
-					"secretID = %v, want %v",
-					repo.deleteSecretID,
-					secretID,
-				)
 			}
 		})
 	}

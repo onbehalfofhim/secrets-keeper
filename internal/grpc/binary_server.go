@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 
@@ -45,8 +46,7 @@ func (s *BinaryServer) UploadBinary(stream pb.BinaryService_UploadBinaryServer) 
 	ownerID, err := getUserID(ctx)
 	if err != nil {
 		s.logger.Info("upload binary: authentication failed", "error", err)
-
-		return err
+		return fmt.Errorf("upload binary: authentication failed: %w", err)
 	}
 
 	var (
@@ -157,7 +157,7 @@ func (s *BinaryServer) DownloadBinary(req *pb.DownloadBinaryRequest, stream pb.B
 	if err != nil {
 		s.logger.Info("download binary: authentication failed", "error", err)
 
-		return err
+		return fmt.Errorf("download binary: authentication failed: %w", err)
 	}
 
 	secretID, err := uuid.Parse(

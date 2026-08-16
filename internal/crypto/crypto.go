@@ -10,6 +10,8 @@ import (
 	"log/slog"
 )
 
+//go:generate mockery --name Encryptor
+
 var (
 	ErrInvalidKey        = errors.New("invalid encryption key")
 	ErrInvalidCiphertext = errors.New("invalid ciphertext")

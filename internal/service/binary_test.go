@@ -6,14 +6,16 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/mock"
 
 	"github.com/onbehalfofhim/secrets-keeper/internal/models"
 	"github.com/onbehalfofhim/secrets-keeper/internal/repository"
+	"github.com/onbehalfofhim/secrets-keeper/internal/service/mocks"
 )
 
 func TestNewBinaryService(t *testing.T) {
-	repo := &mockSecretRepository{}
-	encryptor := &mockEncryptor{}
+	repo := mocks.NewMockSecretRepo(t)
+	encryptor := mocks.NewMockEncryptor(t)
 
 	service := NewBinaryService(repo, encryptor)
 
@@ -43,24 +45,16 @@ func TestBinaryService_Upload(t *testing.T) {
 	updateErr := errors.New("update failed")
 
 	tests := []struct {
-		name string
-
+		name     string
 		ownerID  uuid.UUID
 		secretID uuid.UUID
 		data     []byte
 
-		getByIDFunc func(
-			ctx context.Context,
-			ownerID, secretID uuid.UUID,
-		) (*models.Secret, error)
-
-		encryptFunc func([]byte) ([]byte, error)
-
-		updateEncryptedDataFunc func(
-			ctx context.Context,
-			ownerID, secretID uuid.UUID,
-			encryptedData []byte,
-		) error
+		setupMock func(
+			*mock.Mock,
+			*mocks.MockSecretRepo,
+			*mocks.MockEncryptor,
+		)
 
 		wantErr error
 	}{
@@ -83,11 +77,18 @@ func TestBinaryService_Upload(t *testing.T) {
 			ownerID:  ownerID,
 			secretID: secretID,
 			data:     plainData,
-			getByIDFunc: func(
-				ctx context.Context,
-				ownerID, secretID uuid.UUID,
-			) (*models.Secret, error) {
-				return nil, repository.ErrSecretNotFound
+			setupMock: func(
+				_ *mock.Mock,
+				repo *mocks.MockSecretRepo,
+				_ *mocks.MockEncryptor,
+			) {
+				repo.EXPECT().
+					GetByID(
+						mock.Anything,
+						ownerID,
+						secretID,
+					).
+					Return(nil, repository.ErrSecretNotFound)
 			},
 			wantErr: repository.ErrSecretNotFound,
 		},
@@ -96,15 +97,22 @@ func TestBinaryService_Upload(t *testing.T) {
 			ownerID:  ownerID,
 			secretID: secretID,
 			data:     plainData,
-			getByIDFunc: func(
-				ctx context.Context,
-				ownerID, secretID uuid.UUID,
-			) (*models.Secret, error) {
-				return &models.Secret{
-					ID:      secretID,
-					OwnerID: ownerID,
-					Type:    models.SecretText,
-				}, nil
+			setupMock: func(
+				_ *mock.Mock,
+				repo *mocks.MockSecretRepo,
+				_ *mocks.MockEncryptor,
+			) {
+				repo.EXPECT().
+					GetByID(
+						mock.Anything,
+						ownerID,
+						secretID,
+					).
+					Return(&models.Secret{
+						ID:      secretID,
+						OwnerID: ownerID,
+						Type:    models.SecretText,
+					}, nil)
 			},
 			wantErr: ErrInvalidSecretType,
 		},
@@ -113,18 +121,26 @@ func TestBinaryService_Upload(t *testing.T) {
 			ownerID:  ownerID,
 			secretID: secretID,
 			data:     plainData,
-			getByIDFunc: func(
-				ctx context.Context,
-				ownerID, secretID uuid.UUID,
-			) (*models.Secret, error) {
-				return &models.Secret{
-					ID:      secretID,
-					OwnerID: ownerID,
-					Type:    models.SecretBinary,
-				}, nil
-			},
-			encryptFunc: func(data []byte) ([]byte, error) {
-				return nil, encryptionErr
+			setupMock: func(
+				_ *mock.Mock,
+				repo *mocks.MockSecretRepo,
+				encryptor *mocks.MockEncryptor,
+			) {
+				repo.EXPECT().
+					GetByID(
+						mock.Anything,
+						ownerID,
+						secretID,
+					).
+					Return(&models.Secret{
+						ID:      secretID,
+						OwnerID: ownerID,
+						Type:    models.SecretBinary,
+					}, nil)
+
+				encryptor.EXPECT().
+					Encrypt(plainData).
+					Return(nil, encryptionErr)
 			},
 			wantErr: encryptionErr,
 		},
@@ -133,25 +149,35 @@ func TestBinaryService_Upload(t *testing.T) {
 			ownerID:  ownerID,
 			secretID: secretID,
 			data:     plainData,
-			getByIDFunc: func(
-				ctx context.Context,
-				ownerID, secretID uuid.UUID,
-			) (*models.Secret, error) {
-				return &models.Secret{
-					ID:      secretID,
-					OwnerID: ownerID,
-					Type:    models.SecretBinary,
-				}, nil
-			},
-			encryptFunc: func(data []byte) ([]byte, error) {
-				return encryptedData, nil
-			},
-			updateEncryptedDataFunc: func(
-				ctx context.Context,
-				ownerID, secretID uuid.UUID,
-				encryptedData []byte,
-			) error {
-				return updateErr
+			setupMock: func(
+				_ *mock.Mock,
+				repo *mocks.MockSecretRepo,
+				encryptor *mocks.MockEncryptor,
+			) {
+				repo.EXPECT().
+					GetByID(
+						mock.Anything,
+						ownerID,
+						secretID,
+					).
+					Return(&models.Secret{
+						ID:      secretID,
+						OwnerID: ownerID,
+						Type:    models.SecretBinary,
+					}, nil)
+
+				encryptor.EXPECT().
+					Encrypt(plainData).
+					Return(encryptedData, nil)
+
+				repo.EXPECT().
+					UpdateEncryptedData(
+						mock.Anything,
+						ownerID,
+						secretID,
+						encryptedData,
+					).
+					Return(updateErr)
 			},
 			wantErr: updateErr,
 		},
@@ -160,38 +186,50 @@ func TestBinaryService_Upload(t *testing.T) {
 			ownerID:  ownerID,
 			secretID: secretID,
 			data:     plainData,
-			getByIDFunc: func(
-				ctx context.Context,
-				ownerID, secretID uuid.UUID,
-			) (*models.Secret, error) {
-				return &models.Secret{
-					ID:      secretID,
-					OwnerID: ownerID,
-					Type:    models.SecretBinary,
-				}, nil
-			},
-			encryptFunc: func(data []byte) ([]byte, error) {
-				return encryptedData, nil
-			},
-			updateEncryptedDataFunc: func(
-				ctx context.Context,
-				ownerID, secretID uuid.UUID,
-				encryptedData []byte,
-			) error {
-				return nil
+			setupMock: func(
+				_ *mock.Mock,
+				repo *mocks.MockSecretRepo,
+				encryptor *mocks.MockEncryptor,
+			) {
+				repo.EXPECT().
+					GetByID(
+						mock.Anything,
+						ownerID,
+						secretID,
+					).
+					Return(&models.Secret{
+						ID:      secretID,
+						OwnerID: ownerID,
+						Type:    models.SecretBinary,
+					}, nil)
+
+				encryptor.EXPECT().
+					Encrypt(plainData).
+					Return(encryptedData, nil)
+
+				repo.EXPECT().
+					UpdateEncryptedData(
+						mock.Anything,
+						ownerID,
+						secretID,
+						encryptedData,
+					).
+					Return(nil)
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := &mockSecretRepository{
-				getByIDFunc:             tt.getByIDFunc,
-				updateEncryptedDataFunc: tt.updateEncryptedDataFunc,
-			}
+			repo := mocks.NewMockSecretRepo(t)
+			encryptor := mocks.NewMockEncryptor(t)
 
-			encryptor := &mockEncryptor{
-				encryptFunc: tt.encryptFunc,
+			if tt.setupMock != nil {
+				tt.setupMock(
+					&mock.Mock{},
+					repo,
+					encryptor,
+				)
 			}
 
 			service := NewBinaryService(repo, encryptor)
@@ -222,71 +260,13 @@ func TestBinaryService_Upload(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-
-			if !repo.getByIDCalled {
-				t.Fatal("expected GetByID to be called")
-			}
-
-			if repo.getByIDOwnerID != ownerID {
-				t.Errorf(
-					"GetByID ownerID = %v, want %v",
-					repo.getByIDOwnerID,
-					ownerID,
-				)
-			}
-
-			if repo.getByIDSecretID != secretID {
-				t.Errorf(
-					"GetByID secretID = %v, want %v",
-					repo.getByIDSecretID,
-					secretID,
-				)
-			}
-
-			if !encryptor.encryptCalled {
-				t.Fatal("expected Encrypt to be called")
-			}
-
-			if string(encryptor.encryptInput) != string(plainData) {
-				t.Errorf(
-					"Encrypt input = %q, want %q",
-					encryptor.encryptInput,
-					plainData,
-				)
-			}
-
-			if !repo.updateEncryptedDataCalled {
-				t.Fatal("expected UpdateEncryptedData to be called")
-			}
-
-			if repo.updateEncryptedDataOwnerID != ownerID {
-				t.Errorf(
-					"UpdateEncryptedData ownerID = %v, want %v",
-					repo.updateEncryptedDataOwnerID,
-					ownerID,
-				)
-			}
-
-			if repo.updateEncryptedDataSecretID != secretID {
-				t.Errorf(
-					"UpdateEncryptedData secretID = %v, want %v",
-					repo.updateEncryptedDataSecretID,
-					secretID,
-				)
-			}
-
-			if string(repo.updateEncryptedData) != string(encryptedData) {
-				t.Errorf(
-					"encrypted data = %q, want %q",
-					repo.updateEncryptedData,
-					encryptedData,
-				)
-			}
 		})
 	}
 }
 
-func TestBinaryService_Upload_DoesNotCallDependenciesForInvalidIDs(t *testing.T) {
+func TestBinaryService_Upload_DoesNotCallDependenciesForInvalidIDs(
+	t *testing.T,
+) {
 	tests := []struct {
 		name     string
 		ownerID  uuid.UUID
@@ -306,8 +286,8 @@ func TestBinaryService_Upload_DoesNotCallDependenciesForInvalidIDs(t *testing.T)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := &mockSecretRepository{}
-			encryptor := &mockEncryptor{}
+			repo := mocks.NewMockSecretRepo(t)
+			encryptor := mocks.NewMockEncryptor(t)
 
 			service := NewBinaryService(repo, encryptor)
 
@@ -325,45 +305,39 @@ func TestBinaryService_Upload_DoesNotCallDependenciesForInvalidIDs(t *testing.T)
 				)
 			}
 
-			if repo.getByIDCalled {
-				t.Error("GetByID should not be called")
-			}
-
-			if encryptor.encryptCalled {
-				t.Error("Encrypt should not be called")
-			}
-
-			if repo.updateEncryptedDataCalled {
-				t.Error(
-					"UpdateEncryptedData should not be called",
-				)
-			}
+			// Если сервис неожиданно вызовет эти методы,
+			// mockery автоматически сообщит об unexpected call.
 		})
 	}
 }
 
-func TestBinaryService_Upload_DoesNotEncryptNonBinarySecret(t *testing.T) {
-	repo := &mockSecretRepository{
-		getByIDFunc: func(
-			ctx context.Context,
-			ownerID, secretID uuid.UUID,
-		) (*models.Secret, error) {
-			return &models.Secret{
-				ID:      secretID,
-				OwnerID: ownerID,
-				Type:    models.SecretText,
-			}, nil
-		},
-	}
+func TestBinaryService_Upload_DoesNotEncryptNonBinarySecret(
+	t *testing.T,
+) {
+	ownerID := uuid.New()
+	secretID := uuid.New()
 
-	encryptor := &mockEncryptor{}
+	repo := mocks.NewMockSecretRepo(t)
+	encryptor := mocks.NewMockEncryptor(t)
+
+	repo.EXPECT().
+		GetByID(
+			mock.Anything,
+			ownerID,
+			secretID,
+		).
+		Return(&models.Secret{
+			ID:      secretID,
+			OwnerID: ownerID,
+			Type:    models.SecretText,
+		}, nil)
 
 	service := NewBinaryService(repo, encryptor)
 
 	err := service.Upload(
 		context.Background(),
-		uuid.New(),
-		uuid.New(),
+		ownerID,
+		secretID,
 		[]byte("data"),
 	)
 
@@ -374,17 +348,8 @@ func TestBinaryService_Upload_DoesNotEncryptNonBinarySecret(t *testing.T) {
 		)
 	}
 
-	if encryptor.encryptCalled {
-		t.Fatal(
-			"Encrypt should not be called for non-binary secret",
-		)
-	}
-
-	if repo.updateEncryptedDataCalled {
-		t.Fatal(
-			"UpdateEncryptedData should not be called for non-binary secret",
-		)
-	}
+	// Encrypt и UpdateEncryptedData не имеют EXPECT().
+	// Поэтому их вызов автоматически будет считаться ошибкой.
 }
 
 func TestBinaryService_Download(t *testing.T) {
@@ -399,17 +364,14 @@ func TestBinaryService_Download(t *testing.T) {
 	decryptionErr := errors.New("decryption failed")
 
 	tests := []struct {
-		name string
-
+		name     string
 		ownerID  uuid.UUID
 		secretID uuid.UUID
 
-		getByIDFunc func(
-			ctx context.Context,
-			ownerID, secretID uuid.UUID,
-		) (*models.Secret, error)
-
-		decryptFunc func([]byte) ([]byte, error)
+		setupMock func(
+			*mocks.MockSecretRepo,
+			*mocks.MockEncryptor,
+		)
 
 		want    []byte
 		wantErr error
@@ -430,11 +392,17 @@ func TestBinaryService_Download(t *testing.T) {
 			name:     "repository error",
 			ownerID:  ownerID,
 			secretID: secretID,
-			getByIDFunc: func(
-				ctx context.Context,
-				ownerID, secretID uuid.UUID,
-			) (*models.Secret, error) {
-				return nil, repository.ErrSecretNotFound
+			setupMock: func(
+				repo *mocks.MockSecretRepo,
+				_ *mocks.MockEncryptor,
+			) {
+				repo.EXPECT().
+					GetByID(
+						mock.Anything,
+						ownerID,
+						secretID,
+					).
+					Return(nil, repository.ErrSecretNotFound)
 			},
 			wantErr: repository.ErrSecretNotFound,
 		},
@@ -442,15 +410,21 @@ func TestBinaryService_Download(t *testing.T) {
 			name:     "secret is not binary",
 			ownerID:  ownerID,
 			secretID: secretID,
-			getByIDFunc: func(
-				ctx context.Context,
-				ownerID, secretID uuid.UUID,
-			) (*models.Secret, error) {
-				return &models.Secret{
-					ID:      secretID,
-					OwnerID: ownerID,
-					Type:    models.SecretText,
-				}, nil
+			setupMock: func(
+				repo *mocks.MockSecretRepo,
+				_ *mocks.MockEncryptor,
+			) {
+				repo.EXPECT().
+					GetByID(
+						mock.Anything,
+						ownerID,
+						secretID,
+					).
+					Return(&models.Secret{
+						ID:      secretID,
+						OwnerID: ownerID,
+						Type:    models.SecretText,
+					}, nil)
 			},
 			wantErr: ErrInvalidSecretType,
 		},
@@ -458,19 +432,26 @@ func TestBinaryService_Download(t *testing.T) {
 			name:     "decryption error",
 			ownerID:  ownerID,
 			secretID: secretID,
-			getByIDFunc: func(
-				ctx context.Context,
-				ownerID, secretID uuid.UUID,
-			) (*models.Secret, error) {
-				return &models.Secret{
-					ID:            secretID,
-					OwnerID:       ownerID,
-					Type:          models.SecretBinary,
-					EncryptedData: encryptedData,
-				}, nil
-			},
-			decryptFunc: func(data []byte) ([]byte, error) {
-				return nil, decryptionErr
+			setupMock: func(
+				repo *mocks.MockSecretRepo,
+				encryptor *mocks.MockEncryptor,
+			) {
+				repo.EXPECT().
+					GetByID(
+						mock.Anything,
+						ownerID,
+						secretID,
+					).
+					Return(&models.Secret{
+						ID:            secretID,
+						OwnerID:       ownerID,
+						Type:          models.SecretBinary,
+						EncryptedData: encryptedData,
+					}, nil)
+
+				encryptor.EXPECT().
+					Decrypt(encryptedData).
+					Return(nil, decryptionErr)
 			},
 			wantErr: decryptionErr,
 		},
@@ -478,19 +459,26 @@ func TestBinaryService_Download(t *testing.T) {
 			name:     "success",
 			ownerID:  ownerID,
 			secretID: secretID,
-			getByIDFunc: func(
-				ctx context.Context,
-				ownerID, secretID uuid.UUID,
-			) (*models.Secret, error) {
-				return &models.Secret{
-					ID:            secretID,
-					OwnerID:       ownerID,
-					Type:          models.SecretBinary,
-					EncryptedData: encryptedData,
-				}, nil
-			},
-			decryptFunc: func(data []byte) ([]byte, error) {
-				return plainData, nil
+			setupMock: func(
+				repo *mocks.MockSecretRepo,
+				encryptor *mocks.MockEncryptor,
+			) {
+				repo.EXPECT().
+					GetByID(
+						mock.Anything,
+						ownerID,
+						secretID,
+					).
+					Return(&models.Secret{
+						ID:            secretID,
+						OwnerID:       ownerID,
+						Type:          models.SecretBinary,
+						EncryptedData: encryptedData,
+					}, nil)
+
+				encryptor.EXPECT().
+					Decrypt(encryptedData).
+					Return(plainData, nil)
 			},
 			want: plainData,
 		},
@@ -498,12 +486,11 @@ func TestBinaryService_Download(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := &mockSecretRepository{
-				getByIDFunc: tt.getByIDFunc,
-			}
+			repo := mocks.NewMockSecretRepo(t)
+			encryptor := mocks.NewMockEncryptor(t)
 
-			encryptor := &mockEncryptor{
-				decryptFunc: tt.decryptFunc,
+			if tt.setupMock != nil {
+				tt.setupMock(repo, encryptor)
 			}
 
 			service := NewBinaryService(repo, encryptor)
@@ -548,27 +535,13 @@ func TestBinaryService_Download(t *testing.T) {
 					tt.want,
 				)
 			}
-
-			if !repo.getByIDCalled {
-				t.Fatal("expected GetByID to be called")
-			}
-
-			if !encryptor.decryptCalled {
-				t.Fatal("expected Decrypt to be called")
-			}
-
-			if string(encryptor.decryptInput) != string(encryptedData) {
-				t.Errorf(
-					"Decrypt input = %q, want %q",
-					encryptor.decryptInput,
-					encryptedData,
-				)
-			}
 		})
 	}
 }
 
-func TestBinaryService_Download_DoesNotCallDependenciesForInvalidIDs(t *testing.T) {
+func TestBinaryService_Download_DoesNotCallDependenciesForInvalidIDs(
+	t *testing.T,
+) {
 	tests := []struct {
 		name     string
 		ownerID  uuid.UUID
@@ -588,8 +561,8 @@ func TestBinaryService_Download_DoesNotCallDependenciesForInvalidIDs(t *testing.
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := &mockSecretRepository{}
-			encryptor := &mockEncryptor{}
+			repo := mocks.NewMockSecretRepo(t)
+			encryptor := mocks.NewMockEncryptor(t)
 
 			service := NewBinaryService(repo, encryptor)
 
@@ -605,52 +578,43 @@ func TestBinaryService_Download_DoesNotCallDependenciesForInvalidIDs(t *testing.
 					err,
 				)
 			}
-
-			if repo.getByIDCalled {
-				t.Error("GetByID should not be called")
-			}
-
-			if encryptor.decryptCalled {
-				t.Error("Decrypt should not be called")
-			}
 		})
 	}
 }
 
-func TestBinaryService_Download_DoesNotDecryptNonBinarySecret(t *testing.T) {
-	repo := &mockSecretRepository{
-		getByIDFunc: func(
-			ctx context.Context,
-			ownerID, secretID uuid.UUID,
-		) (*models.Secret, error) {
-			return &models.Secret{
-				ID:      secretID,
-				OwnerID: ownerID,
-				Type:    models.SecretText,
-			}, nil
-		},
-	}
+func TestBinaryService_Download_DoesNotDecryptNonBinarySecret(
+	t *testing.T,
+) {
+	ownerID := uuid.New()
+	secretID := uuid.New()
 
-	encryptor := &mockEncryptor{}
+	repo := mocks.NewMockSecretRepo(t)
+	encryptor := mocks.NewMockEncryptor(t)
+
+	repo.EXPECT().
+		GetByID(
+			mock.Anything,
+			ownerID,
+			secretID,
+		).
+		Return(&models.Secret{
+			ID:      secretID,
+			OwnerID: ownerID,
+			Type:    models.SecretText,
+		}, nil)
 
 	service := NewBinaryService(repo, encryptor)
 
 	_, err := service.Download(
 		context.Background(),
-		uuid.New(),
-		uuid.New(),
+		ownerID,
+		secretID,
 	)
 
 	if !errors.Is(err, ErrInvalidSecretType) {
 		t.Fatalf(
 			"expected ErrInvalidSecretType, got %v",
 			err,
-		)
-	}
-
-	if encryptor.decryptCalled {
-		t.Fatal(
-			"Decrypt should not be called for non-binary secret",
 		)
 	}
 }

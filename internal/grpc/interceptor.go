@@ -32,6 +32,7 @@ func UserIDFromContext(ctx context.Context) (string, error) {
 	if value == nil {
 		return "", ErrUserIDNotFound
 	}
+
 	userID, ok := value.(string)
 	if !ok {
 		return "", fmt.Errorf(
@@ -40,6 +41,7 @@ func UserIDFromContext(ctx context.Context) (string, error) {
 			value,
 		)
 	}
+
 	return userID, nil
 }
 

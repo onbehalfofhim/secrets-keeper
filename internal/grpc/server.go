@@ -95,7 +95,7 @@ func (s *Server) Start() error {
 			"error", err,
 		)
 
-		return err
+		return fmt.Errorf("gRPC server stopped with error: %w", err)
 	}
 
 	return nil

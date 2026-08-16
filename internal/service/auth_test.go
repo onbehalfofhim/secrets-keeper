@@ -11,6 +11,9 @@ import (
 	"github.com/onbehalfofhim/secrets-keeper/internal/auth"
 	"github.com/onbehalfofhim/secrets-keeper/internal/models"
 	"github.com/onbehalfofhim/secrets-keeper/internal/repository"
+	"github.com/onbehalfofhim/secrets-keeper/internal/service/mocks"
+
+	"github.com/stretchr/testify/mock"
 )
 
 func newTestAuthService(repo repository.UserRepo) *AuthService {
@@ -23,7 +26,7 @@ func newTestAuthService(repo repository.UserRepo) *AuthService {
 }
 
 func TestNewAuthService(t *testing.T) {
-	repo := &mockUserRepository{}
+	repo := mocks.NewMockUserRepo(t)
 	jwt := auth.NewJWT("secret", time.Hour)
 
 	service := NewAuthService(repo, jwt)
@@ -50,15 +53,12 @@ func TestAuthService_Register(t *testing.T) {
 	repositoryErr := errors.New("database error")
 
 	tests := []struct {
-		name       string
-		login      string
-		password   string
-		createFunc func(
-			ctx context.Context,
-			login, passwordHash string,
-		) (*models.User, error)
-		want    *models.User
-		wantErr error
+		name      string
+		login     string
+		password  string
+		setupMock func(*mocks.MockUserRepo, string)
+		want      *models.User
+		wantErr   error
 	}{
 		{
 			name:     "empty login",
@@ -76,11 +76,17 @@ func TestAuthService_Register(t *testing.T) {
 			name:     "user already exists",
 			login:    "existing-user",
 			password: "password",
-			createFunc: func(
-				ctx context.Context,
-				login, passwordHash string,
-			) (*models.User, error) {
-				return nil, repository.ErrUserExists
+			setupMock: func(
+				repo *mocks.MockUserRepo,
+				_ string,
+			) {
+				repo.EXPECT().
+					Create(
+						mock.Anything,
+						"existing-user",
+						mock.Anything,
+					).
+					Return(nil, repository.ErrUserExists)
 			},
 			wantErr: repository.ErrUserExists,
 		},
@@ -88,11 +94,17 @@ func TestAuthService_Register(t *testing.T) {
 			name:     "repository error",
 			login:    "test-user",
 			password: "password",
-			createFunc: func(
-				ctx context.Context,
-				login, passwordHash string,
-			) (*models.User, error) {
-				return nil, repositoryErr
+			setupMock: func(
+				repo *mocks.MockUserRepo,
+				_ string,
+			) {
+				repo.EXPECT().
+					Create(
+						mock.Anything,
+						"test-user",
+						mock.Anything,
+					).
+					Return(nil, repositoryErr)
 			},
 			wantErr: repositoryErr,
 		},
@@ -100,16 +112,36 @@ func TestAuthService_Register(t *testing.T) {
 			name:     "success",
 			login:    "test-user",
 			password: "password",
-			createFunc: func(
-				ctx context.Context,
-				login, passwordHash string,
-			) (*models.User, error) {
-				return &models.User{
-					ID:           userID,
-					Login:        login,
-					PasswordHash: passwordHash,
-					CreatedAt:    createdAt,
-				}, nil
+			setupMock: func(
+				repo *mocks.MockUserRepo,
+				passwordHash string,
+			) {
+				repo.EXPECT().
+					Create(
+						mock.Anything,
+						"test-user",
+						mock.MatchedBy(func(hash string) bool {
+							if hash == passwordHash {
+								t.Fatal(
+									"password was passed to repository without hashing",
+								)
+							}
+
+							if err := auth.CheckPassword(
+								hash,
+								passwordHash,
+							); err != nil {
+								return false
+							}
+
+							return true
+						}),
+					).
+					Return(&models.User{
+						ID:        userID,
+						Login:     "test-user",
+						CreatedAt: createdAt,
+					}, nil)
 			},
 			want: &models.User{
 				ID:        userID,
@@ -121,8 +153,110 @@ func TestAuthService_Register(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := &mockUserRepository{
-				createFunc: tt.createFunc,
+			repo := mocks.NewMockUserRepo(t)
+
+			var passwordHash string
+
+			if tt.setupMock != nil {
+				if tt.password != "" {
+					var err error
+
+					passwordHash, err = auth.HashPassword(tt.password)
+					if err != nil {
+						t.Fatalf(
+							"failed to hash password: %v",
+							err,
+						)
+					}
+				}
+
+				// Для успешного сценария setupMock проверяет
+				// непосредственно хеш, который будет передан
+				// сервисом в repository.
+				if tt.name == "success" {
+					var capturedHash string
+
+					repo.EXPECT().
+						Create(
+							mock.Anything,
+							tt.login,
+							mock.MatchedBy(func(hash string) bool {
+								capturedHash = hash
+
+								if hash == tt.password {
+									return false
+								}
+
+								return auth.CheckPassword(
+									hash,
+									tt.password,
+								) == nil
+							}),
+						).
+						Return(&models.User{
+							ID:        userID,
+							Login:     tt.login,
+							CreatedAt: createdAt,
+						}, nil)
+
+					service := newTestAuthService(repo)
+
+					got, err := service.Register(
+						ctx,
+						tt.login,
+						tt.password,
+					)
+
+					if err != nil {
+						t.Fatalf("unexpected error: %v", err)
+					}
+
+					if got == nil {
+						t.Fatal("expected user, got nil")
+					}
+
+					if got.ID != tt.want.ID {
+						t.Errorf(
+							"ID = %v, want %v",
+							got.ID,
+							tt.want.ID,
+						)
+					}
+
+					if got.Login != tt.want.Login {
+						t.Errorf(
+							"Login = %q, want %q",
+							got.Login,
+							tt.want.Login,
+						)
+					}
+
+					if !got.CreatedAt.Equal(tt.want.CreatedAt) {
+						t.Errorf(
+							"CreatedAt = %v, want %v",
+							got.CreatedAt,
+							tt.want.CreatedAt,
+						)
+					}
+
+					if capturedHash == "" {
+						t.Fatal("expected password hash to be captured")
+					}
+
+					if err := auth.CheckPassword(
+						capturedHash,
+						tt.password,
+					); err != nil {
+						t.Fatalf(
+							"password hash does not match original password: %v",
+							err,
+						)
+					}
+
+					return
+				}
+
+				tt.setupMock(repo, passwordHash)
 			}
 
 			service := newTestAuthService(repo)
@@ -163,60 +297,6 @@ func TestAuthService_Register(t *testing.T) {
 			if got == nil {
 				t.Fatal("expected user, got nil")
 			}
-
-			if got.ID != tt.want.ID {
-				t.Errorf(
-					"ID = %v, want %v",
-					got.ID,
-					tt.want.ID,
-				)
-			}
-
-			if got.Login != tt.want.Login {
-				t.Errorf(
-					"Login = %q, want %q",
-					got.Login,
-					tt.want.Login,
-				)
-			}
-
-			if !got.CreatedAt.Equal(tt.want.CreatedAt) {
-				t.Errorf(
-					"CreatedAt = %v, want %v",
-					got.CreatedAt,
-					tt.want.CreatedAt,
-				)
-			}
-
-			if !repo.createCalled {
-				t.Fatal("expected Create to be called")
-			}
-
-			if repo.createLogin != tt.login {
-				t.Errorf(
-					"Create login = %q, want %q",
-					repo.createLogin,
-					tt.login,
-				)
-			}
-
-			// Сервис должен передавать в repository
-			// хеш пароля, а не исходный пароль.
-			if repo.createPasswordHash == tt.password {
-				t.Fatal(
-					"password was passed to repository without hashing",
-				)
-			}
-
-			if err := auth.CheckPassword(
-				repo.createPasswordHash,
-				tt.password,
-			); err != nil {
-				t.Fatalf(
-					"password hash does not match original password: %v",
-					err,
-				)
-			}
 		})
 	}
 }
@@ -244,7 +324,7 @@ func TestAuthService_Register_DoesNotCallRepositoryOnInvalidInput(t *testing.T) 
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := &mockUserRepository{}
+			repo := mocks.NewMockUserRepo(t)
 			service := newTestAuthService(repo)
 
 			_, err := service.Register(
@@ -260,10 +340,6 @@ func TestAuthService_Register_DoesNotCallRepositoryOnInvalidInput(t *testing.T) 
 					err,
 				)
 			}
-
-			if repo.createCalled {
-				t.Fatal("repository Create should not be called")
-			}
 		})
 	}
 }
@@ -271,14 +347,15 @@ func TestAuthService_Register_DoesNotCallRepositoryOnInvalidInput(t *testing.T) 
 func TestAuthService_Register_WrapsRepositoryError(t *testing.T) {
 	repoErr := errors.New("database unavailable")
 
-	repo := &mockUserRepository{
-		createFunc: func(
-			ctx context.Context,
-			login, passwordHash string,
-		) (*models.User, error) {
-			return nil, repoErr
-		},
-	}
+	repo := mocks.NewMockUserRepo(t)
+
+	repo.EXPECT().
+		Create(
+			mock.Anything,
+			"user",
+			mock.Anything,
+		).
+		Return(nil, repoErr)
 
 	service := newTestAuthService(repo)
 
@@ -316,14 +393,11 @@ func TestAuthService_Login(t *testing.T) {
 	repositoryErr := errors.New("database error")
 
 	tests := []struct {
-		name       string
-		login      string
-		password   string
-		getByLogin func(
-			ctx context.Context,
-			login string,
-		) (*models.User, error)
-		wantErr error
+		name      string
+		login     string
+		password  string
+		setupMock func(*mocks.MockUserRepo)
+		wantErr   error
 	}{
 		{
 			name:     "empty login",
@@ -341,11 +415,13 @@ func TestAuthService_Login(t *testing.T) {
 			name:     "user not found",
 			login:    "unknown",
 			password: "password",
-			getByLogin: func(
-				ctx context.Context,
-				login string,
-			) (*models.User, error) {
-				return nil, repository.ErrUserNotFound
+			setupMock: func(repo *mocks.MockUserRepo) {
+				repo.EXPECT().
+					GetByLogin(
+						mock.Anything,
+						"unknown",
+					).
+					Return(nil, repository.ErrUserNotFound)
 			},
 			wantErr: ErrInvalidCredentials,
 		},
@@ -353,11 +429,13 @@ func TestAuthService_Login(t *testing.T) {
 			name:     "repository error",
 			login:    "user",
 			password: "password",
-			getByLogin: func(
-				ctx context.Context,
-				login string,
-			) (*models.User, error) {
-				return nil, repositoryErr
+			setupMock: func(repo *mocks.MockUserRepo) {
+				repo.EXPECT().
+					GetByLogin(
+						mock.Anything,
+						"user",
+					).
+					Return(nil, repositoryErr)
 			},
 			wantErr: repositoryErr,
 		},
@@ -365,15 +443,17 @@ func TestAuthService_Login(t *testing.T) {
 			name:     "wrong password",
 			login:    "user",
 			password: "wrong-password",
-			getByLogin: func(
-				ctx context.Context,
-				login string,
-			) (*models.User, error) {
-				return &models.User{
-					ID:           userID,
-					Login:        "user",
-					PasswordHash: passwordHash,
-				}, nil
+			setupMock: func(repo *mocks.MockUserRepo) {
+				repo.EXPECT().
+					GetByLogin(
+						mock.Anything,
+						"user",
+					).
+					Return(&models.User{
+						ID:           userID,
+						Login:        "user",
+						PasswordHash: passwordHash,
+					}, nil)
 			},
 			wantErr: ErrInvalidCredentials,
 		},
@@ -381,23 +461,27 @@ func TestAuthService_Login(t *testing.T) {
 			name:     "success",
 			login:    "user",
 			password: password,
-			getByLogin: func(
-				ctx context.Context,
-				login string,
-			) (*models.User, error) {
-				return &models.User{
-					ID:           userID,
-					Login:        "user",
-					PasswordHash: passwordHash,
-				}, nil
+			setupMock: func(repo *mocks.MockUserRepo) {
+				repo.EXPECT().
+					GetByLogin(
+						mock.Anything,
+						"user",
+					).
+					Return(&models.User{
+						ID:           userID,
+						Login:        "user",
+						PasswordHash: passwordHash,
+					}, nil)
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := &mockUserRepository{
-				getByLoginFunc: tt.getByLogin,
+			repo := mocks.NewMockUserRepo(t)
+
+			if tt.setupMock != nil {
+				tt.setupMock(repo)
 			}
 
 			service := newTestAuthService(repo)
@@ -453,19 +537,6 @@ func TestAuthService_Login(t *testing.T) {
 				)
 			}
 
-			if !repo.getByLoginCalled {
-				t.Fatal("expected GetByLogin to be called")
-			}
-
-			if repo.getByLogin != tt.login {
-				t.Errorf(
-					"GetByLogin login = %q, want %q",
-					repo.getByLogin,
-					tt.login,
-				)
-			}
-
-			// Проверяем, что JWT действительно содержит ID пользователя.
 			jwt := auth.NewJWT("test-secret", time.Hour)
 
 			gotUserID, err := jwt.ValidateToken(
@@ -514,7 +585,7 @@ func TestAuthService_Login_DoesNotCallRepositoryOnInvalidCredentials(t *testing.
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := &mockUserRepository{}
+			repo := mocks.NewMockUserRepo(t)
 			service := newTestAuthService(repo)
 
 			_, err := service.Login(
@@ -529,12 +600,6 @@ func TestAuthService_Login_DoesNotCallRepositoryOnInvalidCredentials(t *testing.
 					err,
 				)
 			}
-
-			if repo.getByLoginCalled {
-				t.Fatal(
-					"repository GetByLogin should not be called",
-				)
-			}
 		})
 	}
 }
@@ -542,14 +607,14 @@ func TestAuthService_Login_DoesNotCallRepositoryOnInvalidCredentials(t *testing.
 func TestAuthService_Login_WrapsRepositoryError(t *testing.T) {
 	repoErr := errors.New("database unavailable")
 
-	repo := &mockUserRepository{
-		getByLoginFunc: func(
-			ctx context.Context,
-			login string,
-		) (*models.User, error) {
-			return nil, repoErr
-		},
-	}
+	repo := mocks.NewMockUserRepo(t)
+
+	repo.EXPECT().
+		GetByLogin(
+			mock.Anything,
+			"user",
+		).
+		Return(nil, repoErr)
 
 	service := newTestAuthService(repo)
 
