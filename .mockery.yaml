@@ -1,0 +1,27 @@
+with-expecter: true
+resolve-type-alias: false
+disable-version-string: true
+issue-845-fix: true
+
+packages:
+  github.com/onbehalfofhim/secrets-keeper/internal/repository:
+    config:
+      dir: internal/service/mocks
+      outpkg: mocks
+    interfaces:
+      UserRepo:
+      SecretRepo:
+
+  github.com/onbehalfofhim/secrets-keeper/internal/crypto:
+    config:
+      dir: internal/service/mocks
+      outpkg: mocks
+    interfaces:
+      Encryptor:
+
+  github.com/onbehalfofhim/secrets-keeper/internal/serializer:
+    config:
+      dir: internal/service/mocks
+      outpkg: mocks
+    interfaces:
+      Serializer:
