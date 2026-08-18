@@ -141,7 +141,7 @@ func (s *BinaryServer) UploadBinary(stream pb.BinaryService_UploadBinaryServer) 
 	s.logger.Info("binary uploaded", "ownerId", ownerID, "secretId", secretID)
 
 	return stream.SendAndClose(
-		&pb.UploadBinaryResponse{},
+		pb.UploadBinaryResponse_builder{}.Build(),
 	)
 }
 

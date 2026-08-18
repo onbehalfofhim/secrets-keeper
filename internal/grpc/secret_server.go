@@ -273,7 +273,7 @@ func (s *SecretServer) UpdateSecret(ctx context.Context, req *pb.UpdateSecretReq
 
 	s.logger.Info("secret updated", "ownerId", ownerID, "secretId", secretID, "type", input.Type)
 
-	return &pb.UpdateSecretResponse{}, nil
+	return pb.UpdateSecretResponse_builder{}.Build(), nil
 }
 
 // protoToUpdateSecretInput преобразует protobuf-секрет
@@ -502,7 +502,7 @@ func (s *SecretServer) DeleteSecret(ctx context.Context, req *pb.DeleteSecretReq
 
 	s.logger.Info("secret deleted", "ownerId", ownerID, "secretId", secretID)
 
-	return &pb.DeleteSecretResponse{}, nil
+	return pb.DeleteSecretResponse_builder{}.Build(), nil
 }
 
 // domainMetadataToProto преобразует metadata секрета

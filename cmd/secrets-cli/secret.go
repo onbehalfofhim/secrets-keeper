@@ -314,7 +314,7 @@ func listSecrets(app *App) error {
 
 	response, err := app.client.Secret.ListSecrets(
 		ctx,
-		&pb.ListSecretsRequest{},
+		pb.ListSecretsRequest_builder{}.Build(),
 	)
 	if err != nil {
 		return clitool.FormatGRPCError(err)

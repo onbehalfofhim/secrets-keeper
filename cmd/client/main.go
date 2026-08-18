@@ -209,7 +209,7 @@ func main() {
 
 	listResponse, err := secretClient.ListSecrets(
 		authCtx,
-		&pb.ListSecretsRequest{},
+		pb.ListSecretsRequest_builder{}.Build(),
 	)
 	if err != nil {
 		log.Fatalf("list secrets failed: %v", err)

@@ -276,7 +276,7 @@ func TestProtoMetadataToJSON(t *testing.T) {
 		},
 		{
 			name:     "empty metadata",
-			metadata: &pb.SecretMetadata{},
+			metadata: pb.SecretMetadata_builder{}.Build(),
 			want:     `{}`,
 		},
 	}
@@ -493,7 +493,7 @@ func TestProtoToCreateSecretInput(t *testing.T) {
 		},
 		{
 			name:    "payload missing",
-			secret:  &pb.Secret{},
+			secret:  pb.Secret_builder{}.Build(),
 			wantErr: true,
 		},
 	}
@@ -634,7 +634,7 @@ func TestProtoToUpdateSecretInput(t *testing.T) {
 		},
 		{
 			name:    "payload missing",
-			secret:  &pb.Secret{},
+			secret:  pb.Secret_builder{}.Build(),
 			wantErr: true,
 		},
 	}
@@ -1077,7 +1077,7 @@ func TestSecretServer_CreateSecret_NilSecret(t *testing.T) {
 
 	result, err := server.CreateSecret(
 		contextWithUserID(uuid.New()),
-		&pb.CreateSecretRequest{},
+		pb.CreateSecretRequest_builder{}.Build(),
 	)
 
 	if result != nil {
@@ -1101,7 +1101,7 @@ func TestSecretServer_CreateSecret_Unauthenticated(t *testing.T) {
 
 	result, err := server.CreateSecret(
 		context.Background(),
-		&pb.CreateSecretRequest{},
+		pb.CreateSecretRequest_builder{}.Build(),
 	)
 
 	if result != nil {
@@ -1261,7 +1261,7 @@ func TestSecretServer_ListSecrets(t *testing.T) {
 
 	result, err := server.ListSecrets(
 		contextWithUserID(ownerID),
-		&pb.ListSecretsRequest{},
+		pb.ListSecretsRequest_builder{}.Build(),
 	)
 
 	if err != nil {
@@ -1306,7 +1306,7 @@ func TestSecretServer_ListSecrets_Error(t *testing.T) {
 
 	result, err := server.ListSecrets(
 		contextWithUserID(uuid.New()),
-		&pb.ListSecretsRequest{},
+		pb.ListSecretsRequest_builder{}.Build(),
 	)
 
 	if result != nil {
@@ -1476,7 +1476,7 @@ func TestSecretServer_UpdateSecret_NilSecret(t *testing.T) {
 
 	_, err := server.UpdateSecret(
 		contextWithUserID(uuid.New()),
-		&pb.UpdateSecretRequest{},
+		pb.UpdateSecretRequest_builder{}.Build(),
 	)
 
 	if status.Code(err) != codes.InvalidArgument {

@@ -420,7 +420,7 @@ func runSecurityTests(
 
 	listA, err := secretClient.ListSecrets(
 		ctxA,
-		&pb.ListSecretsRequest{},
+		pb.ListSecretsRequest_builder{}.Build(),
 	)
 	if err != nil {
 		log.Fatalf("User A list secrets failed: %v", err)
@@ -449,7 +449,7 @@ func runSecurityTests(
 
 	listB, err := secretClient.ListSecrets(
 		ctxB,
-		&pb.ListSecretsRequest{},
+		pb.ListSecretsRequest_builder{}.Build(),
 	)
 	if err != nil {
 		log.Fatalf("User B list secrets failed: %v", err)

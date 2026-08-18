@@ -320,7 +320,7 @@ func runNegativeSecretTests(
 	_, err = secretClient.CreateSecret(
 		authCtx,
 		pb.CreateSecretRequest_builder{
-			Secret: &pb.Secret{},
+			Secret: pb.Secret_builder{}.Build(),
 		}.Build(),
 	)
 

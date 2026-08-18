@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -17,10 +18,10 @@ func TestUserIDFromContext(t *testing.T) {
 	userID := "550e8400-e29b-41d4-a716-446655440000"
 
 	tests := []struct {
-		name   string
-		ctx    context.Context
-		wantID string
-		wantOK bool
+		name    string
+		ctx     context.Context
+		wantID  string
+		wantErr error
 	}{
 		{
 			name: "user ID exists",
@@ -29,14 +30,14 @@ func TestUserIDFromContext(t *testing.T) {
 				userIDKey,
 				userID,
 			),
-			wantID: userID,
-			wantOK: true,
+			wantID:  userID,
+			wantErr: nil,
 		},
 		{
-			name:   "user ID does not exist",
-			ctx:    context.Background(),
-			wantID: "",
-			wantOK: false,
+			name:    "user ID does not exist",
+			ctx:     context.Background(),
+			wantID:  "",
+			wantErr: ErrUserIDNotFound,
 		},
 		{
 			name: "wrong value type",
@@ -45,20 +46,28 @@ func TestUserIDFromContext(t *testing.T) {
 				userIDKey,
 				123,
 			),
-			wantID: "",
-			wantOK: false,
+			wantID:  "",
+			wantErr: ErrInvalidUserID,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotID, _ := UserIDFromContext(tt.ctx)
+			gotID, err := UserIDFromContext(tt.ctx)
 
 			if gotID != tt.wantID {
 				t.Errorf(
 					"ID = %q, want %q",
 					gotID,
 					tt.wantID,
+				)
+			}
+
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf(
+					"error = %v, want %v",
+					err,
+					tt.wantErr,
 				)
 			}
 		})
